@@ -47,8 +47,6 @@ if "GEMINI_API_KEY" in st.secrets:
     try:
         CHAVE_API = st.secrets["GEMINI_API_KEY"]
         genai.configure(api_key=CHAVE_API)
-        # ATUALIZAÇÃO CRÍTICA: Mudança para a versão 1.5 para evitar limite de cota (Erro 429)
-        modelo = genai.GenerativeModel('gemini-1.5-flash')
         api_configurada = True
     except Exception as e:
         pass
@@ -128,7 +126,7 @@ with tab2:
     df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
     st.dataframe(df_visual[["Alimento", "Disponível", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
 
-# --- ABA 3: MOTOR DA IA ---
+# --- ABA 3: MOTOR DA IA (COM AUTODETECÇÃO DE MODELOS) ---
 with tab3:
     st.info("A IA vai cruzar seus horários com o estoque atual e montar sua logística completa.")
     st.write("") 
@@ -137,7 +135,7 @@ with tab3:
         if not api_configurada:
             st.error("Configure sua chave de API nos secrets.")
         else:
-            with st.spinner("Analisando estoque e calculando macros..."):
+            with st.status("Iniciando motor da IA...", expanded=True) as status:
                 despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
                 dados_despensa = despensa_ativa.to_dict(orient="records")
                 
@@ -154,27 +152,50 @@ with tab3:
                   ]
                 }}
                 """
-                try:
-                    resposta = modelo.generate_content(prompt)
-                    texto_resposta = resposta.text.strip()
-                    
-                    match = re.search(r'\{.*\}', texto_resposta, re.DOTALL)
-                    if match:
-                        texto_limpo = match.group(0)
-                    else:
-                        texto_limpo = texto_resposta
+                
+                # LISTA DE FALLBACK: Do mais rápido e com mais cota para o mais robusto
+                modelos_para_testar = [
+                    'gemini-1.5-flash',
+                    'gemini-1.5-flash-8b',
+                    'gemini-1.5-pro',
+                    'gemini-pro',
+                    'gemini-2.5-flash'
+                ]
+                
+                sucesso = False
+                ultimo_erro = ""
+                
+                for nome_modelo in modelos_para_testar:
+                    status.update(label=f"Tentando conectar com: {nome_modelo}...", state="running")
+                    try:
+                        modelo = genai.GenerativeModel(nome_modelo)
+                        resposta = modelo.generate_content(prompt)
+                        texto_resposta = resposta.text.strip()
                         
-                    st.session_state.cardapio_atual = json.loads(texto_limpo)
-                    st.session_state.consumidos = set()
-                    st.rerun()
-                    
-                except Exception as e:
-                    st.error(f"🚨 Ocorreu um erro técnico: {e}")
-                    with st.expander("🕵️ Ver o que a IA tentou responder (Para diagnóstico)"):
-                        if 'texto_resposta' in locals():
-                            st.code(texto_resposta)
+                        match = re.search(r'\{.*\}', texto_resposta, re.DOTALL)
+                        if match:
+                            texto_limpo = match.group(0)
                         else:
-                            st.write("A IA não retornou nenhum texto ou houve falha na conexão.")
+                            texto_limpo = texto_resposta
+                            
+                        st.session_state.cardapio_atual = json.loads(texto_limpo)
+                        st.session_state.consumidos = set()
+                        sucesso = True
+                        status.update(label=f"Sucesso! Cardápio gerado usando {nome_modelo}.", state="complete")
+                        st.rerun()
+                        break # Sai do loop porque deu certo!
+                        
+                    except Exception as e:
+                        ultimo_erro = str(e)
+                        # Se for erro de cota (429) ou não encontrado (404), ele ignora e tenta o próximo da lista
+                        if "429" in ultimo_erro or "404" in ultimo_erro or "Quota" in ultimo_erro:
+                            continue
+                        else:
+                            break # Se for outro erro grave, ele para.
+
+                if not sucesso:
+                    status.update(label="Falha na comunicação com a IA.", state="error")
+                    st.error(f"🚨 Não foi possível gerar o cardápio. Todos os modelos falharam ou estão sem cota.\n\nÚltimo erro: {ultimo_erro}")
 
 # --- ABA 4: PAINEL AO VIVO ---
 with tab4:
