@@ -5,8 +5,8 @@ import google.generativeai as genai
 import json
 import os
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA (Interface mais limpa) ---
-st.set_page_config(page_title="Minha Dieta IA", page_icon="🍏", layout="centered") # 'centered' fica mais com cara de app no celular
+# --- 1. CONFIGURAÇÃO DA PÁGINA (NutryAi) ---
+st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered") 
 
 # Injetando CSS personalizado para esconder o menu do Streamlit e deixar com cara de App nativo
 st.markdown("""
@@ -18,10 +18,10 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🍏 Assistente de Nutrição")
-st.caption("Seu planejamento inteligente de 24 horas.")
+st.title("🍏 NutryAi")
+st.caption("Seu assistente de nutrição dinâmico de 24 horas.")
 
-# --- LÓGICA DE MEMÓRIA E IA (Mantida igual, funcionando perfeitamente) ---
+# --- 2. LÓGICA DE MEMÓRIA E ARQUIVOS ---
 ARQUIVO_DESPENSA = "despensa.csv"
 
 def carregar_despensa():
@@ -40,6 +40,7 @@ def carregar_despensa():
 def salvar_despensa(df):
     df.to_csv(ARQUIVO_DESPENSA, index=False)
 
+# --- 3. VERIFICAÇÃO SEGURA DA CHAVE DE API ---
 api_configurada = False
 if "GEMINI_API_KEY" in st.secrets:
     try:
@@ -52,6 +53,7 @@ if "GEMINI_API_KEY" in st.secrets:
 
 fuso_local = timezone(timedelta(hours=-3))
 
+# --- 4. INICIALIZAÇÃO DE VARIÁVEIS NA SESSÃO ---
 if 'despensa' not in st.session_state:
     st.session_state.despensa = carregar_despensa()
 if 'cardapio_atual' not in st.session_state:
@@ -59,10 +61,10 @@ if 'cardapio_atual' not in st.session_state:
 if 'consumidos' not in st.session_state:
     st.session_state.consumidos = set()
 
-# --- 2. NOVA INTERFACE VISUAL (ABAS) ---
-tab1, tab2, tab3, tab4 = st.tabs(["🕒 Rotina", "🛒 Despensa", "🧠 Gerador", "🔴 Ao Vivo"])
+# --- 5. INTERFACE VISUAL (ABAS) ---
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🕒 Rotina", "📦 Estoque", "🧠 Gerador", "🔴 Ao Vivo", "📝 Compras"])
 
-# --- ABA 1: ROTINA (Em formato de Card) ---
+# --- ABA 1: ROTINA ---
 with tab1:
     with st.container(border=True):
         st.subheader("Configuração do Dia")
@@ -83,7 +85,7 @@ with tab1:
             st.session_state.consumidos = set()
             st.success("Rotina salva com sucesso!")
 
-# --- ABA 2: DESPENSA (Interface limpa e botões alinhados) ---
+# --- ABA 2: ESTOQUE (Despensa) ---
 with tab2:
     with st.container(border=True):
         st.subheader("Gerenciar Estoque")
@@ -115,20 +117,30 @@ with tab2:
 
     st.write("📋 **Seu Estoque Atual:**")
     df_visual = st.session_state.despensa.copy()
-    df_visual["Disponível"] = df_visual["Quantidade"].astype(str) + " " + df_visual["Unidade"]
+    
+    # Destaca visualmente o que está esgotado na tabela principal
+    def formatar_estoque(row):
+        if row["Quantidade"] <= 0:
+            return "❌ ESGOTADO"
+        return f"{row['Quantidade']} {row['Unidade']}"
+        
+    df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
     st.dataframe(df_visual[["Alimento", "Disponível", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
 
-# --- ABA 3: MOTOR DA IA (Botão com destaque total) ---
+# --- ABA 3: MOTOR DA IA ---
 with tab3:
     st.info("A IA vai cruzar seus horários com o estoque atual e montar sua logística completa.")
-    st.write("") # Espaçamento
+    st.write("") 
     
     if st.button("⚡ Gerar Cardápio Inteligente", use_container_width=True, type="primary"):
         if not api_configurada:
             st.error("Configure sua chave de API nos secrets.")
         else:
             with st.spinner("Analisando estoque e calculando macros..."):
-                dados_despensa = st.session_state.despensa.to_dict(orient="records")
+                # Remove os itens zerados da visão da IA para ela não tentar usá-rlos
+                despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
+                dados_despensa = despensa_ativa.to_dict(orient="records")
+                
                 prompt = f"""
                 Você é um nutricionista clínico e assistente de logística. 
                 Monte um cardápio de 24h.
@@ -152,14 +164,13 @@ with tab3:
                 except Exception as e:
                     st.error("Erro ao processar a IA. Tente novamente.")
 
-# --- ABA 4: PAINEL AO VIVO (Cards Profissionais) ---
+# --- ABA 4: PAINEL AO VIVO ---
 with tab4:
     hora_agora = datetime.now(fuso_local).strftime("%H:%M")
     
     if st.session_state.cardapio_atual is None:
         st.warning("Gere a estratégia na aba 'Gerador' para acompanhar seu dia.")
     else:
-        # Resumo Diário em um Card estilizado
         with st.container(border=True):
             st.markdown(f"### 🎯 Resumo do Dia (Agora: {hora_agora})")
             resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
@@ -169,7 +180,6 @@ with tab4:
             c3.metric("🌾 Carb", resumo.get('carbos_totais', '0g'))
             c4.metric("🥑 Gord", resumo.get('gorduras_totais', '0g'))
 
-        # Refeições em Cards Individuais
         refeicoes = st.session_state.cardapio_atual.get("refeicoes", [])
         progresso = len(st.session_state.consumidos)
         total_refeicoes = len(refeicoes)
@@ -180,7 +190,6 @@ with tab4:
             id_ref = f"ref_{i}"
             ja_consumido = id_ref in st.session_state.consumidos
             
-            # Card individual para cada refeição
             with st.container(border=True):
                 col_texto, col_check = st.columns([4, 1], vertical_alignment="center")
                 
@@ -206,3 +215,24 @@ with tab4:
                                 st.session_state.despensa.at[linha, 'Quantidade'] -= float(qtd_descontar)
                         salvar_despensa(st.session_state.despensa)
                         st.rerun()
+
+# --- ABA 5: LISTA DE COMPRAS (NOVO) ---
+with tab5:
+    with st.container(border=True):
+        st.markdown("### 🛒 Inteligência de Reposição")
+        st.write("O NutryAi identificou que os seguintes itens acabaram no seu estoque:")
+        
+        # Filtra automaticamente os itens com quantidade zerada ou negativa
+        estoque_zerado = st.session_state.despensa[st.session_state.despensa["Quantidade"] <= 0]
+        
+        if estoque_zerado.empty:
+            st.success("Tudo certo por aqui! Seu estoque está abastecido para os próximos preparos. ✅")
+        else:
+            for index, row in estoque_zerado.iterrows():
+                st.error(f"⚠️ **{row['Alimento']}** precisa ser reposto.")
+                
+    with st.container(border=True):
+        st.markdown("### 📝 Bloco de Notas do Mercado")
+        anotacoes = st.text_area("O que mais você precisa trazer?", height=120, placeholder="Ex: Temperos, papel toalha, café...")
+        if st.button("Salvar Anotações Temporárias"):
+            st.toast("Suas anotações ficarão na tela enquanto você estiver com o app aberto!")
