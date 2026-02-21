@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, time
+from datetime import datetime, time, timezone, timedelta
 import google.generativeai as genai
 import json
 
@@ -8,12 +8,15 @@ import json
 st.set_page_config(page_title="Minha Dieta IA", layout="wide")
 st.title("🤖 Assistente de Nutrição Dinâmica")
 
+# --- AJUSTE DE FUSO HORÁRIO ---
+# Forçando o fuso horário local correto (GMT-3)
+fuso_local = timezone(timedelta(hours=-3))
+
 # --- INICIALIZAÇÃO DE DADOS ---
-# Mudança Crítica: Separamos o número da unidade para permitir cálculos matemáticos
 if 'despensa' not in st.session_state:
     st.session_state.despensa = pd.DataFrame({
         "Alimento": ["Peito de Frango", "Arroz Branco", "Ovo", "Açaí (Zero Xarope)", "Whey Protein", "Azeite"],
-        "Quantidade": [500, 1000, 12, 400, 900, 1],
+        "Quantidade": [500.0, 1000.0, 12.0, 400.0, 900.0, 1.0],
         "Unidade": ["g", "g", "un", "g", "g", "vidro"],
         "Pronto/Rápido": ["Não", "Não", "Sim", "Sim", "Sim", "Sim"]
     })
@@ -21,7 +24,6 @@ if 'despensa' not in st.session_state:
 if 'cardapio_atual' not in st.session_state:
     st.session_state.cardapio_atual = None
 
-# Memória para saber quais refeições já foram descontadas hoje
 if 'consumidos' not in st.session_state:
     st.session_state.consumidos = set()
 
@@ -47,17 +49,44 @@ with tab1:
     tempo_preparo = st.slider("Tempo disponível para cozinhar hoje (minutos)", 0, 120, 20)
     
     if st.button("Salvar Rotina"):
-        # Se a rotina mudou, limpamos o cardápio e os consumidos do dia anterior
         st.session_state.cardapio_atual = None
         st.session_state.consumidos = set()
         st.success("Rotina salva! Vá para a aba Gerador para criar o plano.")
 
-# --- ABA 2: DESPENSA ---
+# --- ABA 2: DESPENSA (ATUALIZADA) ---
 with tab2:
     st.header("Estoque da Casa")
-    st.write("Acompanhe o que está acabando.")
     
-    # Criando uma coluna visual que junta Quantidade + Unidade para ficar bonito
+    # NOVO: Formulário para adicionar itens
+    with st.expander("➕ Adicionar Novo Alimento", expanded=False):
+        with st.form("form_novo_alimento"):
+            st.write("Cadastre um novo item que você comprou:")
+            
+            col_nome, col_qtd = st.columns(2)
+            novo_nome = col_nome.text_input("Nome do Alimento (ex: Aveia)")
+            nova_qtd = col_qtd.number_input("Quantidade", min_value=0.0, step=1.0)
+            
+            col_uni, col_pronto = st.columns(2)
+            nova_unidade = col_uni.selectbox("Unidade", ["g", "kg", "ml", "L", "un", "pacote", "vidro"])
+            novo_pronto = col_pronto.radio("Pronto/Rápido?", ["Não", "Sim"])
+            
+            btn_adicionar = st.form_submit_button("Salvar no Estoque")
+            
+            if btn_adicionar:
+                if novo_nome:
+                    novo_item = pd.DataFrame({
+                        "Alimento": [novo_nome],
+                        "Quantidade": [nova_qtd],
+                        "Unidade": [nova_unidade],
+                        "Pronto/Rápido": [novo_pronto]
+                    })
+                    st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
+                    st.success(f"{novo_nome} adicionado com sucesso!")
+                    st.rerun() # Atualiza a tela instantaneamente
+                else:
+                    st.error("Por favor, preencha o nome do alimento.")
+
+    st.write("### Itens Disponíveis")
     df_visual = st.session_state.despensa.copy()
     df_visual["Estoque"] = df_visual["Quantidade"].astype(str) + " " + df_visual["Unidade"]
     st.dataframe(df_visual[["Alimento", "Estoque", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
@@ -73,7 +102,6 @@ with tab3:
             with st.spinner("Calculando logística, macros e cruzando com o estoque..."):
                 dados_despensa = st.session_state.despensa.to_dict(orient="records")
                 
-                # PROMPT ATUALIZADO: Exigindo a "nota fiscal" (uso_despensa) para desconto automático
                 prompt = f"""
                 Você é um nutricionista clínico e assistente de logística. 
                 Monte um cardápio de 24h.
@@ -113,17 +141,18 @@ with tab3:
                         texto_resposta = texto_resposta.replace("```json", "").replace("```", "").strip()
                     
                     st.session_state.cardapio_atual = json.loads(texto_resposta)
-                    st.session_state.consumidos = set() # Zera o controle de baixas do dia
+                    st.session_state.consumidos = set()
                     st.success("Plano gerado! Acompanhe e dê baixa no 'Painel ao Vivo'.")
                             
                 except Exception as e:
                     st.error("Erro ao processar a IA. Tente clicar em Gerar novamente.")
 
-# --- ABA 4: PAINEL AO VIVO ---
+# --- ABA 4: PAINEL AO VIVO (ATUALIZADA) ---
 with tab4:
     st.header("🔴 Acompanhamento do Dia")
     
-    hora_agora = datetime.now().strftime("%H:%M")
+    # NOVO: Coletando o horário local exato ajustado
+    hora_agora = datetime.now(fuso_local).strftime("%H:%M")
     st.subheader(f"Hora Atual: {hora_agora}")
     
     if st.session_state.cardapio_atual is None:
@@ -153,27 +182,22 @@ with tab4:
                 st.caption(f"🔥 {macros.get('calorias', 0)} kcal | 🥩 Prot: {macros.get('proteinas', '0g')} | 🌾 Carb: {macros.get('carbos', '0g')} | 🥑 Gord: {macros.get('gorduras', '0g')}")
             
             with col_check:
-                # O botão fica desabilitado se já foi consumido para evitar dar baixa duas vezes
                 ja_consumido = id_ref in st.session_state.consumidos
                 concluido = st.checkbox("Consumido", key=f"check_{i}", value=ja_consumido, disabled=ja_consumido)
                 
-                # --- LÓGICA DE DAR BAIXA NA DESPENSA ---
                 if concluido and not ja_consumido:
                     st.session_state.consumidos.add(id_ref)
                     
-                    # Percorre os itens que a IA disse que usou nesta refeição
                     for item_usado in ref.get("uso_despensa", []):
                         nome_exato = item_usado.get("nome_exato")
                         qtd_descontar = item_usado.get("qtd_descontada", 0)
                         
-                        # Encontra a linha no banco de dados
                         idx = st.session_state.despensa.index[st.session_state.despensa['Alimento'] == nome_exato].tolist()
                         if idx:
                             linha = idx[0]
-                            # Faz a matemática subtraindo o que foi comido
-                            st.session_state.despensa.at[linha, 'Quantidade'] -= qtd_descontar
+                            st.session_state.despensa.at[linha, 'Quantidade'] -= float(qtd_descontar)
                     
-                    st.rerun() # Atualiza a tela imediatamente para refletir o progresso e o estoque
+                    st.rerun() 
             
             st.divider()
         
