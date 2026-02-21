@@ -4,7 +4,7 @@ from datetime import datetime, time, timezone, timedelta
 import google.generativeai as genai
 import json
 import os
-import re # NOVO: Biblioteca para extrair o JSON à força, evitando quebras
+import re
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (NutryAi) ---
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered") 
@@ -47,7 +47,8 @@ if "GEMINI_API_KEY" in st.secrets:
     try:
         CHAVE_API = st.secrets["GEMINI_API_KEY"]
         genai.configure(api_key=CHAVE_API)
-        modelo = genai.GenerativeModel('gemini-2.5-flash')
+        # ATUALIZAÇÃO CRÍTICA: Mudança para a versão 1.5 para evitar limite de cota (Erro 429)
+        modelo = genai.GenerativeModel('gemini-1.5-flash')
         api_configurada = True
     except Exception as e:
         pass
@@ -127,7 +128,7 @@ with tab2:
     df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
     st.dataframe(df_visual[["Alimento", "Disponível", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
 
-# --- ABA 3: MOTOR DA IA (Com Extração Robusta de JSON) ---
+# --- ABA 3: MOTOR DA IA ---
 with tab3:
     st.info("A IA vai cruzar seus horários com o estoque atual e montar sua logística completa.")
     st.write("") 
@@ -157,7 +158,6 @@ with tab3:
                     resposta = modelo.generate_content(prompt)
                     texto_resposta = resposta.text.strip()
                     
-                    # Limpeza agressiva: caça apenas o que está entre as chaves principais do JSON
                     match = re.search(r'\{.*\}', texto_resposta, re.DOTALL)
                     if match:
                         texto_limpo = match.group(0)
@@ -169,7 +169,6 @@ with tab3:
                     st.rerun()
                     
                 except Exception as e:
-                    # Sistema Detetive ativado em caso de erro
                     st.error(f"🚨 Ocorreu um erro técnico: {e}")
                     with st.expander("🕵️ Ver o que a IA tentou responder (Para diagnóstico)"):
                         if 'texto_resposta' in locals():
