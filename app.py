@@ -4,11 +4,12 @@ from datetime import datetime, time, timezone, timedelta
 import google.generativeai as genai
 import json
 import os
+import re # NOVO: Biblioteca para extrair o JSON à força, evitando quebras
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (NutryAi) ---
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered") 
 
-# Injetando CSS personalizado para esconder o menu do Streamlit e deixar com cara de App nativo
+# Injetando CSS personalizado para esconder o menu do Streamlit
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -118,7 +119,6 @@ with tab2:
     st.write("📋 **Seu Estoque Atual:**")
     df_visual = st.session_state.despensa.copy()
     
-    # Destaca visualmente o que está esgotado na tabela principal
     def formatar_estoque(row):
         if row["Quantidade"] <= 0:
             return "❌ ESGOTADO"
@@ -127,7 +127,7 @@ with tab2:
     df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
     st.dataframe(df_visual[["Alimento", "Disponível", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
 
-# --- ABA 3: MOTOR DA IA ---
+# --- ABA 3: MOTOR DA IA (Com Extração Robusta de JSON) ---
 with tab3:
     st.info("A IA vai cruzar seus horários com o estoque atual e montar sua logística completa.")
     st.write("") 
@@ -137,7 +137,6 @@ with tab3:
             st.error("Configure sua chave de API nos secrets.")
         else:
             with st.spinner("Analisando estoque e calculando macros..."):
-                # Remove os itens zerados da visão da IA para ela não tentar usá-rlos
                 despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
                 dados_despensa = despensa_ativa.to_dict(orient="records")
                 
@@ -157,12 +156,26 @@ with tab3:
                 try:
                     resposta = modelo.generate_content(prompt)
                     texto_resposta = resposta.text.strip()
-                    if texto_resposta.startswith("```json"): texto_resposta = texto_resposta.replace("```json", "").replace("```", "").strip()
-                    st.session_state.cardapio_atual = json.loads(texto_resposta)
+                    
+                    # Limpeza agressiva: caça apenas o que está entre as chaves principais do JSON
+                    match = re.search(r'\{.*\}', texto_resposta, re.DOTALL)
+                    if match:
+                        texto_limpo = match.group(0)
+                    else:
+                        texto_limpo = texto_resposta
+                        
+                    st.session_state.cardapio_atual = json.loads(texto_limpo)
                     st.session_state.consumidos = set()
                     st.rerun()
+                    
                 except Exception as e:
-                    st.error("Erro ao processar a IA. Tente novamente.")
+                    # Sistema Detetive ativado em caso de erro
+                    st.error(f"🚨 Ocorreu um erro técnico: {e}")
+                    with st.expander("🕵️ Ver o que a IA tentou responder (Para diagnóstico)"):
+                        if 'texto_resposta' in locals():
+                            st.code(texto_resposta)
+                        else:
+                            st.write("A IA não retornou nenhum texto ou houve falha na conexão.")
 
 # --- ABA 4: PAINEL AO VIVO ---
 with tab4:
@@ -216,13 +229,12 @@ with tab4:
                         salvar_despensa(st.session_state.despensa)
                         st.rerun()
 
-# --- ABA 5: LISTA DE COMPRAS (NOVO) ---
+# --- ABA 5: LISTA DE COMPRAS ---
 with tab5:
     with st.container(border=True):
         st.markdown("### 🛒 Inteligência de Reposição")
         st.write("O NutryAi identificou que os seguintes itens acabaram no seu estoque:")
         
-        # Filtra automaticamente os itens com quantidade zerada ou negativa
         estoque_zerado = st.session_state.despensa[st.session_state.despensa["Quantidade"] <= 0]
         
         if estoque_zerado.empty:
