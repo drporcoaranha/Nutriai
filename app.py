@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import time
+from datetime import datetime, time
 import google.generativeai as genai
 import json
 
@@ -20,13 +20,12 @@ if 'cardapio_atual' not in st.session_state:
     st.session_state.cardapio_atual = None
 
 # --- CONFIGURAÇÃO DA API DA IA ---
-# Substitua pela sua chave gratuita gerada no Google AI Studio
 CHAVE_API = "COLE_SUA_CHAVE_AQUI" 
 genai.configure(api_key=CHAVE_API)
 modelo = genai.GenerativeModel('gemini-2.5-flash')
 
 # --- CRIANDO AS ABAS ---
-tab1, tab2, tab3, tab4 = st.tabs(["🕒 Rotina de Hoje", "🛒 Despensa", "🧠 Gerador (IA)", "🔔 Notificações"])
+tab1, tab2, tab3, tab4 = st.tabs(["🕒 Rotina de Hoje", "🛒 Despensa", "🧠 Gerador (IA)", "🔴 Painel ao Vivo"])
 
 # --- ABA 1: ROTINA DIÁRIA ---
 with tab1:
@@ -49,18 +48,16 @@ with tab1:
 with tab2:
     st.header("O que temos em casa?")
     st.dataframe(st.session_state.despensa, use_container_width=True, hide_index=True)
-    st.caption("Você pode editar esses dados conectando a uma planilha do Google futuramente.")
 
 # --- ABA 3: MOTOR DA IA ---
 with tab3:
     st.header("Gerar Cardápio de 24h")
-    st.write("A IA vai cruzar o seu tempo disponível com o que há na despensa para montar a logística.")
     
     if st.button("🧠 Gerar Estratégia do Dia"):
         if CHAVE_API == "COLE_SUA_CHAVE_AQUI":
-            st.error("⚠️ Atenção: Você precisa colocar sua chave de API no código na variável CHAVE_API!")
+            st.error("⚠️ Atenção: Coloque sua chave de API do Google AI Studio no código!")
         else:
-            with st.spinner("Analisando rotina, calculando macros e tempo de preparo..."):
+            with st.spinner("Calculando sua logística alimentar..."):
                 dados_despensa = st.session_state.despensa.to_dict(orient="records")
                 
                 prompt = f"""
@@ -71,60 +68,66 @@ with tab3:
                 - Acordo às: {hora_acordar.strftime('%H:%M')}
                 - Durmo às: {hora_dormir.strftime('%H:%M')}
                 - Trabalho das {trabalho_inicio.strftime('%H:%M')} às {trabalho_fim.strftime('%H:%M')}
-                - Tempo que tenho para cozinhar hoje: {tempo_preparo} minutos. Se for pouco, priorize alimentos prontos, suplementos ou instrua a fazer marmitas rápidas.
+                - Tempo para cozinhar hoje: {tempo_preparo} minutos. Se for pouco, priorize alimentos prontos ou marmitas rápidas.
                 
-                O QUE TENHO EM CASA (Despensa):
+                DESPENSA (Use apenas estes alimentos):
                 {dados_despensa}
                 
-                REGRA DE OURO:
-                Retorne a resposta EXCLUSIVAMENTE em formato JSON puro, sem marcações markdown. O JSON deve conter uma lista chamada "refeicoes", onde cada refeição tem: 
-                "hora" (formato HH:MM), 
-                "nome" (ex: Café da Manhã, Almoço no Trabalho), 
-                "ingredientes" (com quantidades sugeridas), 
-                "instrucao_preparo" (focado no tempo e se deve ser levado em marmita).
+                Retorne EXCLUSIVAMENTE em formato JSON puro. O JSON deve conter uma lista "refeicoes", cada uma com: 
+                "hora" (HH:MM), "nome", "ingredientes" e "instrucao_preparo".
                 """
                 
                 try:
                     resposta = modelo.generate_content(prompt)
                     texto_resposta = resposta.text.strip()
-                    
-                    # Tratamento caso a IA retorne com formatação de código
                     if texto_resposta.startswith("```json"):
                         texto_resposta = texto_resposta.replace("```json", "").replace("```", "").strip()
                     
-                    cardapio_gerado = json.loads(texto_resposta)
-                    st.session_state.cardapio_atual = cardapio_gerado
-                    
-                    st.success("Estratégia calculada com sucesso!")
-                    
-                    # Renderiza o cardápio na tela
-                    for ref in cardapio_gerado.get("refeicoes", []):
-                        with st.expander(f"⏰ {ref['hora']} - {ref['nome']}", expanded=True):
-                            st.write(f"**Ingredientes:** {ref['ingredientes']}")
-                            st.info(f"💡 **Preparo/Logística:** {ref['instrucao_preparo']}")
+                    st.session_state.cardapio_atual = json.loads(texto_resposta)
+                    st.success("Plano gerado! Acompanhe seu progresso no 'Painel ao Vivo'.")
                             
                 except Exception as e:
-                    st.error(f"Erro ao processar a resposta da IA. Detalhes: {e}")
+                    st.error(f"Erro ao processar a IA: {e}")
 
-# --- ABA 4: NOTIFICAÇÕES (LEMBRETES) ---
+# --- ABA 4: PAINEL AO VIVO (NOVO FOCO) ---
 with tab4:
-    st.header("Lembretes Ativos")
+    st.header("🔴 Acompanhamento do Dia")
     
+    # Exibe a hora atual para o usuário se orientar
+    hora_agora = datetime.now().strftime("%H:%M")
+    st.subheader(f"Hora Atual: {hora_agora}")
+    st.divider()
+
     if st.session_state.cardapio_atual is None:
-        st.warning("Gere a estratégia do dia na aba 'Gerador' primeiro para visualizar os lembretes.")
+        st.info("Gere a estratégia na aba 'Gerador' para iniciar o acompanhamento de hoje.")
     else:
-        st.write("Estes são os gatilhos gerados automaticamente baseados na sua estratégia de hoje:")
+        st.write("Marque as refeições conforme for consumindo para manter o controle da sua rotina.")
         
-        # Extraindo dados do JSON gerado para montar a tabela de lembretes
-        lista_lembretes = []
-        for ref in st.session_state.cardapio_atual.get("refeicoes", []):
-            lista_lembretes.append({
-                "Ação": f"Consumir: {ref['nome']}",
-                "Horário": ref['hora'],
-                "Instrução": ref['ingredientes']
-            })
+        # Cria um checklist interativo
+        progresso = 0
+        total_refeicoes = len(st.session_state.cardapio_atual.get("refeicoes", []))
+        
+        for i, ref in enumerate(st.session_state.cardapio_atual.get("refeicoes", [])):
+            col_texto, col_check = st.columns([4, 1])
             
-        df_lembretes = pd.DataFrame(lista_lembretes)
-        st.table(df_lembretes)
+            with col_texto:
+                st.markdown(f"### ⏰ {ref['hora']} - {ref['nome']}")
+                st.write(f"**Prato:** {ref['ingredientes']}")
+                st.caption(f"💡 {ref['instrucao_preparo']}")
+            
+            with col_check:
+                # O Streamlit salva o estado do checkbox automaticamente usando a 'key'
+                concluido = st.checkbox("Consumido", key=f"check_{i}")
+                if concluido:
+                    progresso += 1
+            
+            st.divider()
         
-        st.info("Próximo passo: Conectar estes horários ao envio de mensagens via Telegram.")
+        # Barra de progresso visual no final
+        st.write("### Progresso Diário")
+        if total_refeicoes > 0:
+            porcentagem = progresso / total_refeicoes
+            st.progress(porcentagem)
+            if porcentagem == 1.0:
+                st.balloons()
+                st.success("Parabéns! Você concluiu todas as metas do dia!")
