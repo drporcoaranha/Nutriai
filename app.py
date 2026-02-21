@@ -3,13 +3,35 @@ import pandas as pd
 from datetime import datetime, time, timezone, timedelta
 import google.generativeai as genai
 import json
+import os # NOVO: Biblioteca para lidar com arquivos do sistema
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Minha Dieta IA", layout="wide")
 st.title("🤖 Assistente de Nutrição Dinâmica")
 
+# --- FUNÇÕES DE MEMÓRIA PERMANENTE (NOVO) ---
+ARQUIVO_DESPENSA = "despensa.csv"
+
+def carregar_despensa():
+    # Se o arquivo já existe (você já usou o app antes), ele carrega de lá
+    if os.path.exists(ARQUIVO_DESPENSA):
+        return pd.read_csv(ARQUIVO_DESPENSA)
+    else:
+        # Se for a primeira vez, ele cria a base e já salva
+        df = pd.DataFrame({
+            "Alimento": ["Peito de Frango", "Arroz Branco", "Ovo", "Açaí (Zero Xarope)", "Whey Protein", "Azeite"],
+            "Quantidade": [500.0, 1000.0, 12.0, 400.0, 900.0, 1.0],
+            "Unidade": ["g", "g", "un", "g", "g", "vidro"],
+            "Pronto/Rápido": ["Não", "Não", "Sim", "Sim", "Sim", "Sim"]
+        })
+        df.to_csv(ARQUIVO_DESPENSA, index=False)
+        return df
+
+def salvar_despensa(df):
+    # Grava as mudanças no arquivo permanentemente
+    df.to_csv(ARQUIVO_DESPENSA, index=False)
+
 # --- VERIFICAÇÃO SEGURA DA CHAVE DE API ---
-# O código checa se a chave existe nos secrets antes de tentar usá-la
 api_configurada = False
 if "GEMINI_API_KEY" in st.secrets:
     try:
@@ -21,25 +43,13 @@ if "GEMINI_API_KEY" in st.secrets:
         st.error(f"⚠️ Erro ao configurar a IA: {e}")
 else:
     st.error("⚠️ ALERTA: A chave da API não foi encontrada no ambiente online!")
-    st.info("""
-    **Para resolver no Streamlit Cloud:**
-    1. Vá em **Settings** (Configurações do app) > **Secrets**.
-    2. Cole exatamente este texto na caixa preta:
-    `GEMINI_API_KEY = "sua_chave_do_google_aqui"`
-    3. Clique em **Save** e reinicie o app.
-    """)
 
 # --- AJUSTE DE FUSO HORÁRIO ---
 fuso_local = timezone(timedelta(hours=-3))
 
 # --- INICIALIZAÇÃO DE DADOS ---
 if 'despensa' not in st.session_state:
-    st.session_state.despensa = pd.DataFrame({
-        "Alimento": ["Peito de Frango", "Arroz Branco", "Ovo", "Açaí (Zero Xarope)", "Whey Protein", "Azeite"],
-        "Quantidade": [500.0, 1000.0, 12.0, 400.0, 900.0, 1.0],
-        "Unidade": ["g", "g", "un", "g", "g", "vidro"],
-        "Pronto/Rápido": ["Não", "Não", "Sim", "Sim", "Sim", "Sim"]
-    })
+    st.session_state.despensa = carregar_despensa() # Agora puxa do arquivo permanente!
 
 if 'cardapio_atual' not in st.session_state:
     st.session_state.cardapio_atual = None
@@ -68,37 +78,47 @@ with tab1:
         st.session_state.consumidos = set()
         st.success("Rotina salva! Vá para a aba Gerador para criar o plano.")
 
-# --- ABA 2: DESPENSA ---
+# --- ABA 2: DESPENSA (COM OPÇÃO DE REMOVER) ---
 with tab2:
     st.header("Estoque da Casa")
     
-    with st.expander("➕ Adicionar Novo Alimento", expanded=False):
-        with st.form("form_novo_alimento"):
-            st.write("Cadastre um novo item que você comprou:")
+    col_add, col_rem = st.columns(2)
+    
+    with col_add:
+        with st.expander("➕ Adicionar Alimento", expanded=False):
+            with st.form("form_novo_alimento"):
+                novo_nome = st.text_input("Nome do Alimento")
+                nova_qtd = st.number_input("Quantidade", min_value=0.0, step=1.0)
+                nova_unidade = st.selectbox("Unidade", ["g", "kg", "ml", "L", "un", "pacote", "vidro"])
+                novo_pronto = st.radio("Pronto/Rápido?", ["Não", "Sim"])
+                
+                if st.form_submit_button("Salvar no Estoque"):
+                    if novo_nome:
+                        novo_item = pd.DataFrame({
+                            "Alimento": [novo_nome],
+                            "Quantidade": [nova_qtd],
+                            "Unidade": [nova_unidade],
+                            "Pronto/Rápido": [novo_pronto]
+                        })
+                        st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
+                        salvar_despensa(st.session_state.despensa) # Salva no CSV
+                        st.success(f"{novo_nome} adicionado!")
+                        st.rerun()
+                    else:
+                        st.error("Preencha o nome!")
+
+    # NOVO: Ferramenta para remover itens indesejados
+    with col_rem:
+        with st.expander("🗑️ Remover Alimento", expanded=False):
+            lista_alimentos = st.session_state.despensa["Alimento"].tolist()
+            item_remover = st.selectbox("Selecione o que acabou/está errado:", lista_alimentos)
             
-            col_nome, col_qtd = st.columns(2)
-            novo_nome = col_nome.text_input("Nome do Alimento (ex: Aveia)")
-            nova_qtd = col_qtd.number_input("Quantidade", min_value=0.0, step=1.0)
-            
-            col_uni, col_pronto = st.columns(2)
-            nova_unidade = col_uni.selectbox("Unidade", ["g", "kg", "ml", "L", "un", "pacote", "vidro"])
-            novo_pronto = col_pronto.radio("Pronto/Rápido?", ["Não", "Sim"])
-            
-            btn_adicionar = st.form_submit_button("Salvar no Estoque")
-            
-            if btn_adicionar:
-                if novo_nome:
-                    novo_item = pd.DataFrame({
-                        "Alimento": [novo_nome],
-                        "Quantidade": [nova_qtd],
-                        "Unidade": [nova_unidade],
-                        "Pronto/Rápido": [novo_pronto]
-                    })
-                    st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
-                    st.success(f"{novo_nome} adicionado com sucesso!")
-                    st.rerun()
-                else:
-                    st.error("Por favor, preencha o nome do alimento.")
+            if st.button("Remover Permanentemente"):
+                # Filtra a tabela mantendo apenas os itens diferentes do selecionado
+                st.session_state.despensa = st.session_state.despensa[st.session_state.despensa["Alimento"] != item_remover]
+                salvar_despensa(st.session_state.despensa) # Salva no CSV
+                st.success(f"{item_remover} removido!")
+                st.rerun()
 
     st.write("### Itens Disponíveis")
     df_visual = st.session_state.despensa.copy()
@@ -111,7 +131,7 @@ with tab3:
     
     if st.button("🧠 Gerar Estratégia do Dia"):
         if not api_configurada:
-            st.error("⚠️ Configure sua chave de API nos secrets primeiro para gerar o cardápio.")
+            st.error("⚠️ Configure sua chave de API nos secrets.")
         else:
             with st.spinner("Calculando logística, macros e cruzando com o estoque..."):
                 dados_despensa = st.session_state.despensa.to_dict(orient="records")
@@ -210,6 +230,7 @@ with tab4:
                             linha = idx[0]
                             st.session_state.despensa.at[linha, 'Quantidade'] -= float(qtd_descontar)
                     
+                    salvar_despensa(st.session_state.despensa) # NOVO: Salva no CSV após consumir
                     st.rerun() 
             
             st.divider()
