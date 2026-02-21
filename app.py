@@ -4,6 +4,11 @@ from datetime import datetime, time, timezone, timedelta
 import google.generativeai as genai
 import json
 
+st.write("Chaves que o sistema está lendo:", st.secrets.keys())
+
+
+
+
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Minha Dieta IA", layout="wide")
 st.title("🤖 Assistente de Nutrição Dinâmica")
