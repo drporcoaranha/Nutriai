@@ -9,8 +9,17 @@ st.set_page_config(page_title="Minha Dieta IA", layout="wide")
 st.title("🤖 Assistente de Nutrição Dinâmica")
 
 # --- AJUSTE DE FUSO HORÁRIO ---
-# Forçando o fuso horário local correto (GMT-3)
 fuso_local = timezone(timedelta(hours=-3))
+
+# --- CONFIGURAÇÃO DA API DA IA (VIA SECRETS) ---
+# Tenta buscar a chave de forma segura
+try:
+    CHAVE_API = st.secrets["GEMINI_API_KEY"]
+    genai.configure(api_key=CHAVE_API)
+    modelo = genai.GenerativeModel('gemini-2.5-flash')
+except KeyError:
+    st.error("⚠️ Chave de API não encontrada! Certifique-se de ter configurado o `GEMINI_API_KEY` no seu arquivo `.streamlit/secrets.toml` ou no painel da nuvem.")
+    st.stop() # Para o aplicativo aqui se não tiver a chave
 
 # --- INICIALIZAÇÃO DE DADOS ---
 if 'despensa' not in st.session_state:
@@ -26,11 +35,6 @@ if 'cardapio_atual' not in st.session_state:
 
 if 'consumidos' not in st.session_state:
     st.session_state.consumidos = set()
-
-# --- CONFIGURAÇÃO DA API DA IA ---
-CHAVE_API = "COLE_SUA_CHAVE_AQUI" 
-genai.configure(api_key=CHAVE_API)
-modelo = genai.GenerativeModel('gemini-2.5-flash')
 
 # --- CRIANDO AS ABAS ---
 tab1, tab2, tab3, tab4 = st.tabs(["🕒 Rotina de Hoje", "🛒 Despensa", "🧠 Gerador (IA)", "🔴 Painel ao Vivo"])
@@ -53,11 +57,10 @@ with tab1:
         st.session_state.consumidos = set()
         st.success("Rotina salva! Vá para a aba Gerador para criar o plano.")
 
-# --- ABA 2: DESPENSA (ATUALIZADA) ---
+# --- ABA 2: DESPENSA ---
 with tab2:
     st.header("Estoque da Casa")
     
-    # NOVO: Formulário para adicionar itens
     with st.expander("➕ Adicionar Novo Alimento", expanded=False):
         with st.form("form_novo_alimento"):
             st.write("Cadastre um novo item que você comprou:")
@@ -82,7 +85,7 @@ with tab2:
                     })
                     st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
                     st.success(f"{novo_nome} adicionado com sucesso!")
-                    st.rerun() # Atualiza a tela instantaneamente
+                    st.rerun()
                 else:
                     st.error("Por favor, preencha o nome do alimento.")
 
@@ -96,62 +99,58 @@ with tab3:
     st.header("Gerar Cardápio de 24h")
     
     if st.button("🧠 Gerar Estratégia do Dia"):
-        if CHAVE_API == "COLE_SUA_CHAVE_AQUI":
-            st.error("⚠️ Atenção: Coloque sua chave de API do Google AI Studio no código!")
-        else:
-            with st.spinner("Calculando logística, macros e cruzando com o estoque..."):
-                dados_despensa = st.session_state.despensa.to_dict(orient="records")
-                
-                prompt = f"""
-                Você é um nutricionista clínico e assistente de logística. 
-                Monte um cardápio de 24h.
-                
-                ROTINA:
-                - Acordo às: {hora_acordar.strftime('%H:%M')} | Durmo às: {hora_dormir.strftime('%H:%M')}
-                - Trabalho das {trabalho_inicio.strftime('%H:%M')} às {trabalho_fim.strftime('%H:%M')}
-                - Tempo para cozinhar hoje: {tempo_preparo} min.
-                
-                DESPENSA DISPONÍVEL (Use estritamente estes alimentos e respeite as quantidades máximas):
-                {dados_despensa}
-                
-                Retorne EXCLUSIVAMENTE em formato JSON puro. Estrutura exata:
+        with st.spinner("Calculando logística, macros e cruzando com o estoque..."):
+            dados_despensa = st.session_state.despensa.to_dict(orient="records")
+            
+            prompt = f"""
+            Você é um nutricionista clínico e assistente de logística. 
+            Monte um cardápio de 24h.
+            
+            ROTINA:
+            - Acordo às: {hora_acordar.strftime('%H:%M')} | Durmo às: {hora_dormir.strftime('%H:%M')}
+            - Trabalho das {trabalho_inicio.strftime('%H:%M')} às {trabalho_fim.strftime('%H:%M')}
+            - Tempo para cozinhar hoje: {tempo_preparo} min.
+            
+            DESPENSA DISPONÍVEL (Use estritamente estes alimentos e respeite as quantidades máximas):
+            {dados_despensa}
+            
+            Retorne EXCLUSIVAMENTE em formato JSON puro. Estrutura exata:
+            {{
+              "resumo_diario": {{
+                "calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g"
+              }},
+              "refeicoes": [
                 {{
-                  "resumo_diario": {{
-                    "calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g"
-                  }},
-                  "refeicoes": [
-                    {{
-                      "hora": "HH:MM",
-                      "nome": "Nome",
-                      "ingredientes": "Qtd e Ingrediente",
-                      "instrucao_preparo": "Instrução breve",
-                      "macros": {{ "calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g" }},
-                      "uso_despensa": [
-                        {{ "nome_exato": "NOME EXATO DA DESPENSA", "qtd_descontada": 150 }}
-                      ]
-                    }}
+                  "hora": "HH:MM",
+                  "nome": "Nome",
+                  "ingredientes": "Qtd e Ingrediente",
+                  "instrucao_preparo": "Instrução breve",
+                  "macros": {{ "calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g" }},
+                  "uso_despensa": [
+                    {{ "nome_exato": "NOME EXATO DA DESPENSA", "qtd_descontada": 150 }}
                   ]
                 }}
-                """
+              ]
+            }}
+            """
+            
+            try:
+                resposta = modelo.generate_content(prompt)
+                texto_resposta = resposta.text.strip()
+                if texto_resposta.startswith("```json"):
+                    texto_resposta = texto_resposta.replace("```json", "").replace("```", "").strip()
                 
-                try:
-                    resposta = modelo.generate_content(prompt)
-                    texto_resposta = resposta.text.strip()
-                    if texto_resposta.startswith("```json"):
-                        texto_resposta = texto_resposta.replace("```json", "").replace("```", "").strip()
-                    
-                    st.session_state.cardapio_atual = json.loads(texto_resposta)
-                    st.session_state.consumidos = set()
-                    st.success("Plano gerado! Acompanhe e dê baixa no 'Painel ao Vivo'.")
-                            
-                except Exception as e:
-                    st.error("Erro ao processar a IA. Tente clicar em Gerar novamente.")
+                st.session_state.cardapio_atual = json.loads(texto_resposta)
+                st.session_state.consumidos = set()
+                st.success("Plano gerado! Acompanhe e dê baixa no 'Painel ao Vivo'.")
+                        
+            except Exception as e:
+                st.error("Erro ao processar a IA. Tente clicar em Gerar novamente.")
 
-# --- ABA 4: PAINEL AO VIVO (ATUALIZADA) ---
+# --- ABA 4: PAINEL AO VIVO ---
 with tab4:
     st.header("🔴 Acompanhamento do Dia")
     
-    # NOVO: Coletando o horário local exato ajustado
     hora_agora = datetime.now(fuso_local).strftime("%H:%M")
     st.subheader(f"Hora Atual: {hora_agora}")
     
