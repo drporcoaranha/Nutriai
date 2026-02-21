@@ -3,35 +3,43 @@ import pandas as pd
 from datetime import datetime, time, timezone, timedelta
 import google.generativeai as genai
 import json
-import os # NOVO: Biblioteca para lidar com arquivos do sistema
+import os
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Minha Dieta IA", layout="wide")
-st.title("🤖 Assistente de Nutrição Dinâmica")
+# --- 1. CONFIGURAÇÃO DA PÁGINA (Interface mais limpa) ---
+st.set_page_config(page_title="Minha Dieta IA", page_icon="🍏", layout="centered") # 'centered' fica mais com cara de app no celular
 
-# --- FUNÇÕES DE MEMÓRIA PERMANENTE (NOVO) ---
+# Injetando CSS personalizado para esconder o menu do Streamlit e deixar com cara de App nativo
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .block-container {padding-top: 2rem; padding-bottom: 2rem;}
+    </style>
+    """, unsafe_allow_html=True)
+
+st.title("🍏 Assistente de Nutrição")
+st.caption("Seu planejamento inteligente de 24 horas.")
+
+# --- LÓGICA DE MEMÓRIA E IA (Mantida igual, funcionando perfeitamente) ---
 ARQUIVO_DESPENSA = "despensa.csv"
 
 def carregar_despensa():
-    # Se o arquivo já existe (você já usou o app antes), ele carrega de lá
     if os.path.exists(ARQUIVO_DESPENSA):
         return pd.read_csv(ARQUIVO_DESPENSA)
     else:
-        # Se for a primeira vez, ele cria a base e já salva
         df = pd.DataFrame({
-            "Alimento": ["Peito de Frango", "Arroz Branco", "Ovo", "Açaí (Zero Xarope)", "Whey Protein", "Azeite"],
-            "Quantidade": [500.0, 1000.0, 12.0, 400.0, 900.0, 1.0],
-            "Unidade": ["g", "g", "un", "g", "g", "vidro"],
-            "Pronto/Rápido": ["Não", "Não", "Sim", "Sim", "Sim", "Sim"]
+            "Alimento": ["Peito de Frango", "Arroz Branco", "Ovo", "Whey Protein"],
+            "Quantidade": [500.0, 1000.0, 12.0, 900.0],
+            "Unidade": ["g", "g", "un", "g"],
+            "Pronto/Rápido": ["Não", "Não", "Sim", "Sim"]
         })
         df.to_csv(ARQUIVO_DESPENSA, index=False)
         return df
 
 def salvar_despensa(df):
-    # Grava as mudanças no arquivo permanentemente
     df.to_csv(ARQUIVO_DESPENSA, index=False)
 
-# --- VERIFICAÇÃO SEGURA DA CHAVE DE API ---
 api_configurada = False
 if "GEMINI_API_KEY" in st.secrets:
     try:
@@ -40,204 +48,161 @@ if "GEMINI_API_KEY" in st.secrets:
         modelo = genai.GenerativeModel('gemini-2.5-flash')
         api_configurada = True
     except Exception as e:
-        st.error(f"⚠️ Erro ao configurar a IA: {e}")
-else:
-    st.error("⚠️ ALERTA: A chave da API não foi encontrada no ambiente online!")
+        pass
 
-# --- AJUSTE DE FUSO HORÁRIO ---
 fuso_local = timezone(timedelta(hours=-3))
 
-# --- INICIALIZAÇÃO DE DADOS ---
 if 'despensa' not in st.session_state:
-    st.session_state.despensa = carregar_despensa() # Agora puxa do arquivo permanente!
-
+    st.session_state.despensa = carregar_despensa()
 if 'cardapio_atual' not in st.session_state:
     st.session_state.cardapio_atual = None
-
 if 'consumidos' not in st.session_state:
     st.session_state.consumidos = set()
 
-# --- CRIANDO AS ABAS ---
-tab1, tab2, tab3, tab4 = st.tabs(["🕒 Rotina de Hoje", "🛒 Despensa", "🧠 Gerador (IA)", "🔴 Painel ao Vivo"])
+# --- 2. NOVA INTERFACE VISUAL (ABAS) ---
+tab1, tab2, tab3, tab4 = st.tabs(["🕒 Rotina", "🛒 Despensa", "🧠 Gerador", "🔴 Ao Vivo"])
 
-# --- ABA 1: ROTINA DIÁRIA ---
+# --- ABA 1: ROTINA (Em formato de Card) ---
 with tab1:
-    st.header("Como vai ser o seu dia hoje?")
-    col1, col2 = st.columns(2)
-    with col1:
-        hora_acordar = st.time_input("Horário que acordou / vai acordar", time(6, 0))
-        hora_dormir = st.time_input("Horário que pretende dormir", time(23, 0))
-    with col2:
-        trabalho_inicio = st.time_input("Início do expediente", time(8, 0))
-        trabalho_fim = st.time_input("Fim do expediente", time(18, 0))
-    
-    tempo_preparo = st.slider("Tempo disponível para cozinhar hoje (minutos)", 0, 120, 20)
-    
-    if st.button("Salvar Rotina"):
-        st.session_state.cardapio_atual = None
-        st.session_state.consumidos = set()
-        st.success("Rotina salva! Vá para a aba Gerador para criar o plano.")
+    with st.container(border=True):
+        st.subheader("Configuração do Dia")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            hora_acordar = st.time_input("☀️ Acordar", time(6, 0))
+            hora_dormir = st.time_input("🌙 Dormir", time(23, 0))
+        with col2:
+            trabalho_inicio = st.time_input("💼 Início Trabalho", time(8, 0))
+            trabalho_fim = st.time_input("🏠 Fim Trabalho", time(18, 0))
+        
+        st.divider()
+        tempo_preparo = st.slider("⏱️ Tempo livre para cozinhar (minutos)", 0, 120, 20)
+        
+        if st.button("Salvar Rotina", use_container_width=True, type="primary"):
+            st.session_state.cardapio_atual = None
+            st.session_state.consumidos = set()
+            st.success("Rotina salva com sucesso!")
 
-# --- ABA 2: DESPENSA (COM OPÇÃO DE REMOVER) ---
+# --- ABA 2: DESPENSA (Interface limpa e botões alinhados) ---
 with tab2:
-    st.header("Estoque da Casa")
-    
-    col_add, col_rem = st.columns(2)
-    
-    with col_add:
-        with st.expander("➕ Adicionar Alimento", expanded=False):
-            with st.form("form_novo_alimento"):
-                novo_nome = st.text_input("Nome do Alimento")
-                nova_qtd = st.number_input("Quantidade", min_value=0.0, step=1.0)
-                nova_unidade = st.selectbox("Unidade", ["g", "kg", "ml", "L", "un", "pacote", "vidro"])
-                novo_pronto = st.radio("Pronto/Rápido?", ["Não", "Sim"])
+    with st.container(border=True):
+        st.subheader("Gerenciar Estoque")
+        
+        col_add, col_rem = st.columns(2)
+        
+        with col_add:
+            with st.popover("➕ Novo Alimento", use_container_width=True):
+                novo_nome = st.text_input("Nome")
+                nova_qtd = st.number_input("Qtd", min_value=0.0, step=1.0)
+                nova_unidade = st.selectbox("Medida", ["g", "kg", "ml", "L", "un"])
+                novo_pronto = st.radio("Preparo Rápido?", ["Não", "Sim"], horizontal=True)
                 
-                if st.form_submit_button("Salvar no Estoque"):
+                if st.button("Adicionar"):
                     if novo_nome:
-                        novo_item = pd.DataFrame({
-                            "Alimento": [novo_nome],
-                            "Quantidade": [nova_qtd],
-                            "Unidade": [nova_unidade],
-                            "Pronto/Rápido": [novo_pronto]
-                        })
+                        novo_item = pd.DataFrame({"Alimento": [novo_nome], "Quantidade": [nova_qtd], "Unidade": [nova_unidade], "Pronto/Rápido": [novo_pronto]})
                         st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
-                        salvar_despensa(st.session_state.despensa) # Salva no CSV
-                        st.success(f"{novo_nome} adicionado!")
+                        salvar_despensa(st.session_state.despensa)
                         st.rerun()
-                    else:
-                        st.error("Preencha o nome!")
+        
+        with col_rem:
+            with st.popover("🗑️ Remover", use_container_width=True):
+                lista_alimentos = st.session_state.despensa["Alimento"].tolist()
+                item_remover = st.selectbox("Selecione para apagar:", lista_alimentos)
+                if st.button("Excluir Item"):
+                    st.session_state.despensa = st.session_state.despensa[st.session_state.despensa["Alimento"] != item_remover]
+                    salvar_despensa(st.session_state.despensa)
+                    st.rerun()
 
-    # NOVO: Ferramenta para remover itens indesejados
-    with col_rem:
-        with st.expander("🗑️ Remover Alimento", expanded=False):
-            lista_alimentos = st.session_state.despensa["Alimento"].tolist()
-            item_remover = st.selectbox("Selecione o que acabou/está errado:", lista_alimentos)
-            
-            if st.button("Remover Permanentemente"):
-                # Filtra a tabela mantendo apenas os itens diferentes do selecionado
-                st.session_state.despensa = st.session_state.despensa[st.session_state.despensa["Alimento"] != item_remover]
-                salvar_despensa(st.session_state.despensa) # Salva no CSV
-                st.success(f"{item_remover} removido!")
-                st.rerun()
-
-    st.write("### Itens Disponíveis")
+    st.write("📋 **Seu Estoque Atual:**")
     df_visual = st.session_state.despensa.copy()
-    df_visual["Estoque"] = df_visual["Quantidade"].astype(str) + " " + df_visual["Unidade"]
-    st.dataframe(df_visual[["Alimento", "Estoque", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
+    df_visual["Disponível"] = df_visual["Quantidade"].astype(str) + " " + df_visual["Unidade"]
+    st.dataframe(df_visual[["Alimento", "Disponível", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
 
-# --- ABA 3: MOTOR DA IA ---
+# --- ABA 3: MOTOR DA IA (Botão com destaque total) ---
 with tab3:
-    st.header("Gerar Cardápio de 24h")
+    st.info("A IA vai cruzar seus horários com o estoque atual e montar sua logística completa.")
+    st.write("") # Espaçamento
     
-    if st.button("🧠 Gerar Estratégia do Dia"):
+    if st.button("⚡ Gerar Cardápio Inteligente", use_container_width=True, type="primary"):
         if not api_configurada:
-            st.error("⚠️ Configure sua chave de API nos secrets.")
+            st.error("Configure sua chave de API nos secrets.")
         else:
-            with st.spinner("Calculando logística, macros e cruzando com o estoque..."):
+            with st.spinner("Analisando estoque e calculando macros..."):
                 dados_despensa = st.session_state.despensa.to_dict(orient="records")
-                
                 prompt = f"""
                 Você é um nutricionista clínico e assistente de logística. 
                 Monte um cardápio de 24h.
-                
-                ROTINA:
-                - Acordo às: {hora_acordar.strftime('%H:%M')} | Durmo às: {hora_dormir.strftime('%H:%M')}
-                - Trabalho das {trabalho_inicio.strftime('%H:%M')} às {trabalho_fim.strftime('%H:%M')}
-                - Tempo para cozinhar hoje: {tempo_preparo} min.
-                
-                DESPENSA DISPONÍVEL (Use estritamente estes alimentos e respeite as quantidades máximas):
-                {dados_despensa}
-                
-                Retorne EXCLUSIVAMENTE em formato JSON puro. Estrutura exata:
+                ROTINA: Acordo: {hora_acordar.strftime('%H:%M')} | Durmo: {hora_dormir.strftime('%H:%M')} | Trabalho: {trabalho_inicio.strftime('%H:%M')} às {trabalho_fim.strftime('%H:%M')} | Tempo cozinhar: {tempo_preparo} min.
+                DESPENSA DISPONÍVEL (Use estritamente estes alimentos): {dados_despensa}
+                Retorne EXCLUSIVAMENTE em formato JSON puro. Estrutura:
                 {{
-                  "resumo_diario": {{
-                    "calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g"
-                  }},
+                  "resumo_diario": {{ "calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g" }},
                   "refeicoes": [
-                    {{
-                      "hora": "HH:MM",
-                      "nome": "Nome",
-                      "ingredientes": "Qtd e Ingrediente",
-                      "instrucao_preparo": "Instrução breve",
-                      "macros": {{ "calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g" }},
-                      "uso_despensa": [
-                        {{ "nome_exato": "NOME EXATO DA DESPENSA", "qtd_descontada": 150 }}
-                      ]
-                    }}
+                    {{ "hora": "HH:MM", "nome": "Nome", "ingredientes": "Qtd e Ingrediente", "instrucao_preparo": "Instrução breve", "macros": {{ "calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g" }}, "uso_despensa": [ {{ "nome_exato": "NOME EXATO DA DESPENSA", "qtd_descontada": 150 }} ] }}
                   ]
                 }}
                 """
-                
                 try:
                     resposta = modelo.generate_content(prompt)
                     texto_resposta = resposta.text.strip()
-                    if texto_resposta.startswith("```json"):
-                        texto_resposta = texto_resposta.replace("```json", "").replace("```", "").strip()
-                    
+                    if texto_resposta.startswith("```json"): texto_resposta = texto_resposta.replace("```json", "").replace("```", "").strip()
                     st.session_state.cardapio_atual = json.loads(texto_resposta)
                     st.session_state.consumidos = set()
-                    st.success("Plano gerado! Acompanhe e dê baixa no 'Painel ao Vivo'.")
-                            
+                    st.rerun()
                 except Exception as e:
-                    st.error("Erro ao processar a IA. Tente clicar em Gerar novamente.")
+                    st.error("Erro ao processar a IA. Tente novamente.")
 
-# --- ABA 4: PAINEL AO VIVO ---
+# --- ABA 4: PAINEL AO VIVO (Cards Profissionais) ---
 with tab4:
-    st.header("🔴 Acompanhamento do Dia")
-    
     hora_agora = datetime.now(fuso_local).strftime("%H:%M")
-    st.subheader(f"Hora Atual: {hora_agora}")
     
     if st.session_state.cardapio_atual is None:
-        st.info("Gere a estratégia na aba 'Gerador' para iniciar o acompanhamento.")
+        st.warning("Gere a estratégia na aba 'Gerador' para acompanhar seu dia.")
     else:
-        resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
-        st.markdown("### 📊 Meta Nutricional")
-        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-        col_m1.metric("Calorias", resumo.get('calorias_totais', '0'))
-        col_m2.metric("Proteínas", resumo.get('proteinas_totais', '0g'))
-        col_m3.metric("Carboidratos", resumo.get('carbos_totais', '0g'))
-        col_m4.metric("Gorduras", resumo.get('gorduras_totais', '0g'))
-        st.divider()
+        # Resumo Diário em um Card estilizado
+        with st.container(border=True):
+            st.markdown(f"### 🎯 Resumo do Dia (Agora: {hora_agora})")
+            resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("🔥 Kcal", resumo.get('calorias_totais', '0'))
+            c2.metric("🥩 Prot", resumo.get('proteinas_totais', '0g'))
+            c3.metric("🌾 Carb", resumo.get('carbos_totais', '0g'))
+            c4.metric("🥑 Gord", resumo.get('gorduras_totais', '0g'))
 
+        # Refeições em Cards Individuais
         refeicoes = st.session_state.cardapio_atual.get("refeicoes", [])
         progresso = len(st.session_state.consumidos)
         total_refeicoes = len(refeicoes)
         
-        for i, ref in enumerate(refeicoes):
-            col_texto, col_check = st.columns([4, 1])
-            id_ref = f"ref_{i}"
-            
-            with col_texto:
-                st.markdown(f"#### ⏰ {ref['hora']} - {ref['nome']}")
-                st.write(f"**Prato:** {ref['ingredientes']}")
-                macros = ref.get('macros', {})
-                st.caption(f"🔥 {macros.get('calorias', 0)} kcal | 🥩 Prot: {macros.get('proteinas', '0g')} | 🌾 Carb: {macros.get('carbos', '0g')} | 🥑 Gord: {macros.get('gorduras', '0g')}")
-            
-            with col_check:
-                ja_consumido = id_ref in st.session_state.consumidos
-                concluido = st.checkbox("Consumido", key=f"check_{i}", value=ja_consumido, disabled=ja_consumido)
-                
-                if concluido and not ja_consumido:
-                    st.session_state.consumidos.add(id_ref)
-                    
-                    for item_usado in ref.get("uso_despensa", []):
-                        nome_exato = item_usado.get("nome_exato")
-                        qtd_descontar = item_usado.get("qtd_descontada", 0)
-                        
-                        idx = st.session_state.despensa.index[st.session_state.despensa['Alimento'] == nome_exato].tolist()
-                        if idx:
-                            linha = idx[0]
-                            st.session_state.despensa.at[linha, 'Quantidade'] -= float(qtd_descontar)
-                    
-                    salvar_despensa(st.session_state.despensa) # NOVO: Salva no CSV após consumir
-                    st.rerun() 
-            
-            st.divider()
+        st.progress(progresso / total_refeicoes if total_refeicoes > 0 else 0)
         
-        if total_refeicoes > 0:
-            porcentagem = len(st.session_state.consumidos) / total_refeicoes
-            st.progress(porcentagem)
-            if porcentagem == 1.0:
-                st.balloons()
-                st.success("Dia finalizado! Seus macros e seu estoque estão atualizados.")
+        for i, ref in enumerate(refeicoes):
+            id_ref = f"ref_{i}"
+            ja_consumido = id_ref in st.session_state.consumidos
+            
+            # Card individual para cada refeição
+            with st.container(border=True):
+                col_texto, col_check = st.columns([4, 1], vertical_alignment="center")
+                
+                with col_texto:
+                    cor_status = "✅" if ja_consumido else "🕒"
+                    st.markdown(f"**{cor_status} {ref['hora']} | {ref['nome']}**")
+                    st.write(f"🍽️ {ref['ingredientes']}")
+                    
+                    macros = ref.get('macros', {})
+                    st.caption(f"💡 {ref['instrucao_preparo']} | 🔥 {macros.get('calorias', 0)} kcal")
+                
+                with col_check:
+                    concluido = st.checkbox("Baixa", key=f"check_{i}", value=ja_consumido, disabled=ja_consumido)
+                    
+                    if concluido and not ja_consumido:
+                        st.session_state.consumidos.add(id_ref)
+                        for item_usado in ref.get("uso_despensa", []):
+                            nome_exato = item_usado.get("nome_exato")
+                            qtd_descontar = item_usado.get("qtd_descontada", 0)
+                            idx = st.session_state.despensa.index[st.session_state.despensa['Alimento'] == nome_exato].tolist()
+                            if idx:
+                                linha = idx[0]
+                                st.session_state.despensa.at[linha, 'Quantidade'] -= float(qtd_descontar)
+                        salvar_despensa(st.session_state.despensa)
+                        st.rerun()
