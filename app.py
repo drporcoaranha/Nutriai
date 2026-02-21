@@ -8,16 +8,22 @@ import json
 st.set_page_config(page_title="Minha Dieta IA", layout="wide")
 st.title("🤖 Assistente de Nutrição Dinâmica")
 
-# --- INICIALIZAÇÃO DE DADOS (MEMÓRIA DO APP) ---
+# --- INICIALIZAÇÃO DE DADOS ---
+# Mudança Crítica: Separamos o número da unidade para permitir cálculos matemáticos
 if 'despensa' not in st.session_state:
     st.session_state.despensa = pd.DataFrame({
-        "Alimento": ["Peito de Frango", "Arroz Branco", "Ovo", "Açaí (Zero Xarope)", "Whey Protein"],
-        "Quantidade Disponível": ["500g", "1kg", "12 un", "400g", "900g"],
-        "Pronto/Rápido": ["Não", "Não", "Sim", "Sim", "Sim"]
+        "Alimento": ["Peito de Frango", "Arroz Branco", "Ovo", "Açaí (Zero Xarope)", "Whey Protein", "Azeite"],
+        "Quantidade": [500, 1000, 12, 400, 900, 1],
+        "Unidade": ["g", "g", "un", "g", "g", "vidro"],
+        "Pronto/Rápido": ["Não", "Não", "Sim", "Sim", "Sim", "Sim"]
     })
 
 if 'cardapio_atual' not in st.session_state:
     st.session_state.cardapio_atual = None
+
+# Memória para saber quais refeições já foram descontadas hoje
+if 'consumidos' not in st.session_state:
+    st.session_state.consumidos = set()
 
 # --- CONFIGURAÇÃO DA API DA IA ---
 CHAVE_API = "COLE_SUA_CHAVE_AQUI" 
@@ -30,7 +36,6 @@ tab1, tab2, tab3, tab4 = st.tabs(["🕒 Rotina de Hoje", "🛒 Despensa", "🧠 
 # --- ABA 1: ROTINA DIÁRIA ---
 with tab1:
     st.header("Como vai ser o seu dia hoje?")
-    
     col1, col2 = st.columns(2)
     with col1:
         hora_acordar = st.time_input("Horário que acordou / vai acordar", time(6, 0))
@@ -42,12 +47,20 @@ with tab1:
     tempo_preparo = st.slider("Tempo disponível para cozinhar hoje (minutos)", 0, 120, 20)
     
     if st.button("Salvar Rotina"):
+        # Se a rotina mudou, limpamos o cardápio e os consumidos do dia anterior
+        st.session_state.cardapio_atual = None
+        st.session_state.consumidos = set()
         st.success("Rotina salva! Vá para a aba Gerador para criar o plano.")
 
 # --- ABA 2: DESPENSA ---
 with tab2:
-    st.header("O que temos em casa?")
-    st.dataframe(st.session_state.despensa, use_container_width=True, hide_index=True)
+    st.header("Estoque da Casa")
+    st.write("Acompanhe o que está acabando.")
+    
+    # Criando uma coluna visual que junta Quantidade + Unidade para ficar bonito
+    df_visual = st.session_state.despensa.copy()
+    df_visual["Estoque"] = df_visual["Quantidade"].astype(str) + " " + df_visual["Unidade"]
+    st.dataframe(df_visual[["Alimento", "Estoque", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
 
 # --- ABA 3: MOTOR DA IA ---
 with tab3:
@@ -57,24 +70,40 @@ with tab3:
         if CHAVE_API == "COLE_SUA_CHAVE_AQUI":
             st.error("⚠️ Atenção: Coloque sua chave de API do Google AI Studio no código!")
         else:
-            with st.spinner("Calculando sua logística alimentar..."):
+            with st.spinner("Calculando logística, macros e cruzando com o estoque..."):
                 dados_despensa = st.session_state.despensa.to_dict(orient="records")
                 
+                # PROMPT ATUALIZADO: Exigindo a "nota fiscal" (uso_despensa) para desconto automático
                 prompt = f"""
-                Você é um assistente de nutrição prático e focado em logística. 
-                Monte um cardápio de 24h cobrindo as necessidades nutricionais básicas.
+                Você é um nutricionista clínico e assistente de logística. 
+                Monte um cardápio de 24h.
                 
-                MINHA ROTINA HOJE:
-                - Acordo às: {hora_acordar.strftime('%H:%M')}
-                - Durmo às: {hora_dormir.strftime('%H:%M')}
+                ROTINA:
+                - Acordo às: {hora_acordar.strftime('%H:%M')} | Durmo às: {hora_dormir.strftime('%H:%M')}
                 - Trabalho das {trabalho_inicio.strftime('%H:%M')} às {trabalho_fim.strftime('%H:%M')}
-                - Tempo para cozinhar hoje: {tempo_preparo} minutos. Se for pouco, priorize alimentos prontos ou marmitas rápidas.
+                - Tempo para cozinhar hoje: {tempo_preparo} min.
                 
-                DESPENSA (Use apenas estes alimentos):
+                DESPENSA DISPONÍVEL (Use estritamente estes alimentos e respeite as quantidades máximas):
                 {dados_despensa}
                 
-                Retorne EXCLUSIVAMENTE em formato JSON puro. O JSON deve conter uma lista "refeicoes", cada uma com: 
-                "hora" (HH:MM), "nome", "ingredientes" e "instrucao_preparo".
+                Retorne EXCLUSIVAMENTE em formato JSON puro. Estrutura exata:
+                {{
+                  "resumo_diario": {{
+                    "calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g"
+                  }},
+                  "refeicoes": [
+                    {{
+                      "hora": "HH:MM",
+                      "nome": "Nome",
+                      "ingredientes": "Qtd e Ingrediente",
+                      "instrucao_preparo": "Instrução breve",
+                      "macros": {{ "calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g" }},
+                      "uso_despensa": [
+                        {{ "nome_exato": "NOME EXATO DA DESPENSA", "qtd_descontada": 150 }}
+                      ]
+                    }}
+                  ]
+                }}
                 """
                 
                 try:
@@ -84,50 +113,73 @@ with tab3:
                         texto_resposta = texto_resposta.replace("```json", "").replace("```", "").strip()
                     
                     st.session_state.cardapio_atual = json.loads(texto_resposta)
-                    st.success("Plano gerado! Acompanhe seu progresso no 'Painel ao Vivo'.")
+                    st.session_state.consumidos = set() # Zera o controle de baixas do dia
+                    st.success("Plano gerado! Acompanhe e dê baixa no 'Painel ao Vivo'.")
                             
                 except Exception as e:
-                    st.error(f"Erro ao processar a IA: {e}")
+                    st.error("Erro ao processar a IA. Tente clicar em Gerar novamente.")
 
-# --- ABA 4: PAINEL AO VIVO (NOVO FOCO) ---
+# --- ABA 4: PAINEL AO VIVO ---
 with tab4:
     st.header("🔴 Acompanhamento do Dia")
     
-    # Exibe a hora atual para o usuário se orientar
     hora_agora = datetime.now().strftime("%H:%M")
     st.subheader(f"Hora Atual: {hora_agora}")
-    st.divider()
-
+    
     if st.session_state.cardapio_atual is None:
-        st.info("Gere a estratégia na aba 'Gerador' para iniciar o acompanhamento de hoje.")
+        st.info("Gere a estratégia na aba 'Gerador' para iniciar o acompanhamento.")
     else:
-        st.write("Marque as refeições conforme for consumindo para manter o controle da sua rotina.")
+        resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
+        st.markdown("### 📊 Meta Nutricional")
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        col_m1.metric("Calorias", resumo.get('calorias_totais', '0'))
+        col_m2.metric("Proteínas", resumo.get('proteinas_totais', '0g'))
+        col_m3.metric("Carboidratos", resumo.get('carbos_totais', '0g'))
+        col_m4.metric("Gorduras", resumo.get('gorduras_totais', '0g'))
+        st.divider()
+
+        refeicoes = st.session_state.cardapio_atual.get("refeicoes", [])
+        progresso = len(st.session_state.consumidos)
+        total_refeicoes = len(refeicoes)
         
-        # Cria um checklist interativo
-        progresso = 0
-        total_refeicoes = len(st.session_state.cardapio_atual.get("refeicoes", []))
-        
-        for i, ref in enumerate(st.session_state.cardapio_atual.get("refeicoes", [])):
+        for i, ref in enumerate(refeicoes):
             col_texto, col_check = st.columns([4, 1])
+            id_ref = f"ref_{i}"
             
             with col_texto:
-                st.markdown(f"### ⏰ {ref['hora']} - {ref['nome']}")
+                st.markdown(f"#### ⏰ {ref['hora']} - {ref['nome']}")
                 st.write(f"**Prato:** {ref['ingredientes']}")
-                st.caption(f"💡 {ref['instrucao_preparo']}")
+                macros = ref.get('macros', {})
+                st.caption(f"🔥 {macros.get('calorias', 0)} kcal | 🥩 Prot: {macros.get('proteinas', '0g')} | 🌾 Carb: {macros.get('carbos', '0g')} | 🥑 Gord: {macros.get('gorduras', '0g')}")
             
             with col_check:
-                # O Streamlit salva o estado do checkbox automaticamente usando a 'key'
-                concluido = st.checkbox("Consumido", key=f"check_{i}")
-                if concluido:
-                    progresso += 1
+                # O botão fica desabilitado se já foi consumido para evitar dar baixa duas vezes
+                ja_consumido = id_ref in st.session_state.consumidos
+                concluido = st.checkbox("Consumido", key=f"check_{i}", value=ja_consumido, disabled=ja_consumido)
+                
+                # --- LÓGICA DE DAR BAIXA NA DESPENSA ---
+                if concluido and not ja_consumido:
+                    st.session_state.consumidos.add(id_ref)
+                    
+                    # Percorre os itens que a IA disse que usou nesta refeição
+                    for item_usado in ref.get("uso_despensa", []):
+                        nome_exato = item_usado.get("nome_exato")
+                        qtd_descontar = item_usado.get("qtd_descontada", 0)
+                        
+                        # Encontra a linha no banco de dados
+                        idx = st.session_state.despensa.index[st.session_state.despensa['Alimento'] == nome_exato].tolist()
+                        if idx:
+                            linha = idx[0]
+                            # Faz a matemática subtraindo o que foi comido
+                            st.session_state.despensa.at[linha, 'Quantidade'] -= qtd_descontar
+                    
+                    st.rerun() # Atualiza a tela imediatamente para refletir o progresso e o estoque
             
             st.divider()
         
-        # Barra de progresso visual no final
-        st.write("### Progresso Diário")
         if total_refeicoes > 0:
-            porcentagem = progresso / total_refeicoes
+            porcentagem = len(st.session_state.consumidos) / total_refeicoes
             st.progress(porcentagem)
             if porcentagem == 1.0:
                 st.balloons()
-                st.success("Parabéns! Você concluiu todas as metas do dia!")
+                st.success("Dia finalizado! Seus macros e seu estoque estão atualizados.")
