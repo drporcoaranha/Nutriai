@@ -86,31 +86,29 @@ st.markdown("""
         transform: scale(0.98);
     }
 
-    /* 7. MÁGICA DE LAYOUT: Botões Redondos Perfeitamente Centralizados e Lado a Lado no Mobile */
-    
-    /* Hack para impedir que o Streamlit quebre os botões em duas linhas no celular e force eles pro centro */
-    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {
-        display: flex !important;
-        flex-direction: row !important; /* Força ficar lado a lado */
-        justify-content: center !important; /* Centraliza a dupla na tela */
-        gap: 25px !important; /* Distância perfeita entre o + e a Lixeira */
+    /* 7. MÁGICA DE LAYOUT: Domando as Colunas no Celular (Fim da quebra de linha esquerda) */
+    @media (max-width: 768px) {
+        /* Impede o Streamlit de empilhar as colunas e as mantém na mesma linha */
+        div[data-testid="stHorizontalBlock"] {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            justify-content: center !important;
+            gap: 15px !important;
+        }
+        /* Desativa o esticamento de 100% que joga os itens pro canto esquerdo */
+        div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+            width: auto !important;
+            min-width: auto !important;
+            flex: 1 1 auto !important;
+        }
     }
-    
-    /* Faz a coluna abraçar apenas o botão (60px) em vez de esticar a tela toda */
-    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) > div[data-testid="column"] {
-        width: auto !important;
-        flex: 0 0 auto !important;
-        min-width: 0 !important;
-        padding: 0 !important;
-    }
-    
-    /* Fallback caso algum navegador antigo ignore o código acima: centraliza o botão dentro de si mesmo */
+
+    /* 8. Desenho do Botão Círculo Perfeito */
     div[data-testid="stPopover"] {
         display: flex !important;
         justify-content: center !important;
     }
-
-    /* Desenho do Círculo Perfeito */
     div[data-testid="stPopover"] > button {
         width: 60px !important;
         height: 60px !important;
@@ -135,7 +133,7 @@ st.markdown("""
         background-color: #F2F2F7 !important;
     }
 
-    /* 8. Balões do Chat Estilo iMessage */
+    /* 9. Balões do Chat Estilo iMessage */
     div[data-testid="stChatMessage"] {
         border-radius: 18px !important;
         padding: 12px 16px !important;
@@ -146,7 +144,7 @@ st.markdown("""
         color: black !important;
     }
 
-    /* 9. Tabela Fluida Nativa Estilo iOS */
+    /* 10. Tabela Fluida Nativa Estilo iOS */
     table {
         width: 100%;
         border-collapse: collapse;
@@ -270,8 +268,8 @@ with tab1:
 with tab2:
     st.markdown("### 🛒 Seu Estoque")
     
-    # Criamos colunas simples. O CSS injetado lá em cima vai esmagar elas pro centro!
-    col_add, col_rem = st.columns(2)
+    # Criamos 4 colunas: as das pontas (vazias) se esmagam, empurrando os botões pro centro!
+    c_espaco_esq, col_add, col_rem, c_espaco_dir = st.columns([1, 1, 1, 1])
     
     with col_add:
         with st.popover("➕"):
@@ -299,8 +297,9 @@ with tab2:
                 st.toast("🗑️ Item removido!")
                 st.rerun()
 
-    st.write("") # Espaçamento
+    st.write("") # Espaçamento respirável
     
+    # --- TABELA FLUIDA NATIVA ---
     df_visual = st.session_state.despensa.copy()
     def formatar_estoque(row):
         return "❌ ESGOTADO" if row["Quantidade"] <= 0 else f"{row['Quantidade']} {row['Unidade']}"
@@ -472,4 +471,3 @@ with tab5:
                     
                     except Exception as e:
                         st.error(f"Erro na resposta: {e}")
-
