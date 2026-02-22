@@ -23,14 +23,12 @@ st.title("🍏 NutryAi")
 st.caption("Seu assistente de nutrição, gestão de tempo e controle glicêmico.")
 
 # --- 2. LÓGICA DE MEMÓRIA E ARQUIVOS ---
-# Nome novo para forçar a criação da Despensa Inteligente para Resistência à Insulina
 ARQUIVO_DESPENSA = "despensa_inteligente_ri.csv" 
 
 def carregar_despensa():
     if os.path.exists(ARQUIVO_DESPENSA):
         return pd.read_csv(ARQUIVO_DESPENSA)
     else:
-        # Lista de Compras Estratégica para RI (Guia Alimentar BR)
         df = pd.DataFrame({
             "Alimento": [
                 "Ovos", "Goma de Tapioca", "Pão (Francês ou Integral)", 
@@ -65,11 +63,13 @@ if 'despensa' not in st.session_state:
     st.session_state.despensa = carregar_despensa()
 if 'cardapio_atual' not in st.session_state:
     st.session_state.cardapio_atual = None
+if 'cardapio_ideal' not in st.session_state: # NOVO: Memória para o cardápio ideal
+    st.session_state.cardapio_ideal = None
 if 'consumidos' not in st.session_state:
     st.session_state.consumidos = set()
 
 # --- 5. INTERFACE VISUAL (ABAS) ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🕒 Agenda", "📦 Estoque", "🧠 Gerador", "🔴 Ao Vivo", "📝 Compras"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🕒 Agenda", "📦 Estoque", "🧠 Dia a Dia", "👩‍⚕️ Nutri", "🔴 Ao Vivo", "📝 Compras"])
 
 # --- ABA 1: ROTINA EM BLOCOS DE TEMPO ---
 with tab1:
@@ -107,13 +107,14 @@ with tab1:
         
         if st.button("Salvar Agenda", use_container_width=True, type="primary"):
             st.session_state.cardapio_atual = None
+            st.session_state.cardapio_ideal = None # Reseta o ideal também
             st.session_state.consumidos = set()
             st.success("Agenda salva! A IA agora conhece seus blocos de tempo.")
 
 # --- ABA 2: ESTOQUE (Despensa) ---
 with tab2:
     with st.container(border=True):
-        st.subheader("Gerenciar Estoque / Lista de Compras")
+        st.subheader("Gerenciar Estoque")
         
         col_add, col_rem = st.columns(2)
         
@@ -151,12 +152,12 @@ with tab2:
     df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
     st.dataframe(df_visual[["Alimento", "Disponível", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
 
-# --- ABA 3: MOTOR DA IA (PERFIL CLÍNICO INTELIGENTE) ---
+# --- ABA 3: MOTOR DA IA (CENÁRIO REAL / DIA A DIA) ---
 with tab3:
-    st.info("A IA mapeará seus blocos ocupados e fará as combinações perfeitas para controlar sua insulina.")
+    st.info("A IA vai cruzar seus horários com o que você **TEM HOJE NO ESTOQUE** e montar sua logística completa para dar baixa na aba Ao Vivo.")
     st.write("") 
     
-    if st.button("⚡ Gerar Cardápio Inteligente", use_container_width=True, type="primary"):
+    if st.button("⚡ Gerar Cardápio Baseado no Estoque", use_container_width=True, type="primary"):
         if not api_configurada:
             st.error("Configure sua chave de API nos secrets.")
         else:
@@ -165,39 +166,25 @@ with tab3:
                 dados_despensa = despensa_ativa.to_dict(orient="records")
                 
                 prompt = f"""
-                Você é um Nutricionista Clínico de Alta Performance, especialista em Gestão de Tempo e tratamento de Resistência à Insulina (RI).
+                Você é um Nutricionista Clínico especialista em Resistência à Insulina (RI).
+                Sua missão é criar o cardápio real de hoje usando APENAS O ESTOQUE DO PACIENTE.
                 
-                PERFIL DO PACIENTE E DIRETRIZES:
-                - Condição Clínica: Resistência à Insulina.
-                - Diretriz Base: Guia Alimentar para a População Brasileira de 2021 (foco em alimentos in natura e minimamente processados).
+                REGRA GLICÊMICA: NUNCA sugira carboidratos "solteiros" (puros). Sempre faça casamentos (Tapioca com Ovo, Pão com Frango, Fruta com Fibras/Iogurte).
                 
-                REGRA GLICÊMICA ABSOLUTA (SINERGIA ALIMENTAR):
-                O paciente NUNCA deve consumir carboidratos "solteiros" (puros). Você deve OBRIGATORIAMENTE fazer estes casamentos inteligentes:
-                - Tapioca? Misture com Ovo para fazer Crepioca, ou recheie com Frango.
-                - Pão? Adicione Ovos mexidos ou Frango desfiado.
-                - Patinho Moído? Adicione Cenoura ralada para aumentar a fibra da refeição.
-                - Fruta (Maçã)? Adicione Aveia, Chia ou Iogurte para achatar a curva de insulina.
+                AGENDA:
+                Acorda: {hora_acordar.strftime('%H:%M')} | Dorme: {hora_dormir.strftime('%H:%M')} | Trab: {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Trânsito: {transito_inicio.strftime('%H:%M')} às {transito_fim.strftime('%H:%M')} | Treino: {treino_inicio.strftime('%H:%M')} às {treino_fim.strftime('%H:%M')} | Estudo: {estudo_inicio.strftime('%H:%M')} às {estudo_fim.strftime('%H:%M')} | Prep. Máx: {tempo_preparo} min.
                 
-                AGENDA DE BLOCOS OCUPADOS DO PACIENTE:
-                - ☀️ Acorda às: {hora_acordar.strftime('%H:%M')} | 🌙 Dorme às: {hora_dormir.strftime('%H:%M')}
-                - 💼 Trabalho: {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')}
-                - 🚗 Trânsito: {transito_inicio.strftime('%H:%M')} às {transito_fim.strftime('%H:%M')}
-                - 💪 Treino: {treino_inicio.strftime('%H:%M')} às {treino_fim.strftime('%H:%M')}
-                - 📚 Estudo: {estudo_inicio.strftime('%H:%M')} às {estudo_fim.strftime('%H:%M')}
-                - ⏱️ Tempo limite para cozinhar hoje: {tempo_preparo} min.
+                REGRAS:
+                1. Trânsito/Treino/Estudo = Apenas alimentos "Pronto/Rápido: Sim".
+                2. Refeições que exigem fogão vão para os horários livres.
                 
-                REGRAS DE LOGÍSTICA:
-                1. NÃO agende preparos complexos durante os blocos de Trânsito, Treino ou Estudo.
-                2. Use o Bloco de Trânsito apenas para alimentos sinalizados como "Pronto/Rápido: Sim" (ex: "Coma a maçã com iogurte antes de dirigir").
-                3. Refeições que exigem fogão devem estar no tempo LIVRE.
-                
-                DESPENSA DISPONÍVEL (Estrito a estes ingredientes): {dados_despensa}
+                DESPENSA DISPONÍVEL (Estrito a estes): {dados_despensa}
                 
                 Retorne EXCLUSIVAMENTE em formato JSON puro. Estrutura:
                 {{
                   "resumo_diario": {{ "calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g" }},
                   "refeicoes": [
-                    {{ "hora": "HH:MM", "nome": "Nome do Prato", "ingredientes": "Qtd e Ingrediente", "instrucao_preparo": "Instrução de preparo e de logística de tempo", "macros": {{ "calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g" }}, "uso_despensa": [ {{ "nome_exato": "NOME EXATO DO ALIMENTO NA DESPENSA", "qtd_descontada": 150 }} ] }}
+                    {{ "hora": "HH:MM", "nome": "Nome do Prato", "ingredientes": "Qtd e Ingrediente", "instrucao_preparo": "Instrução de preparo", "macros": {{ "calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g" }}, "uso_despensa": [ {{ "nome_exato": "NOME EXATO DO ALIMENTO NA DESPENSA", "qtd_descontada": 150 }} ] }}
                   ]
                 }}
                 """
@@ -205,30 +192,69 @@ with tab3:
                 try:
                     resposta = modelo.generate_content(prompt)
                     texto_resposta = resposta.text.strip()
-                    
                     match = re.search(r'\{.*\}', texto_resposta, re.DOTALL)
-                    if match:
-                        texto_limpo = match.group(0)
-                    else:
-                        texto_limpo = texto_resposta
-                        
+                    texto_limpo = match.group(0) if match else texto_resposta
                     st.session_state.cardapio_atual = json.loads(texto_limpo)
                     st.session_state.consumidos = set()
                     st.rerun()
-                    
                 except Exception as e:
-                    erro_str = str(e)
-                    if "429" in erro_str or "Quota" in erro_str:
-                        st.error("🚨 O Google bloqueou a geração por excesso de uso (Cota Esgotada). Crie uma nova chave API em um novo projeto no Google AI Studio.")
-                    else:
-                        st.error(f"🚨 Erro na IA: {erro_str}")
+                    st.error(f"🚨 Erro na IA: {e}")
 
-# --- ABA 4: PAINEL AO VIVO ---
+# --- ABA 4: A NOVA CONSULTA COM A NUTRICIONISTA (CENÁRIO IDEAL) ---
 with tab4:
+    st.info("Aqui a Nutricionista ignora o seu estoque e cria o **Plano Ideal Perfeito** para a sua Resistência à Insulina baseado nos seus horários. Use isso para descobrir novos alimentos e atualizar sua lista de compras!")
+    
+    if st.button("👩‍⚕️ Consultar Nutricionista (Gerar Plano Ideal)", use_container_width=True):
+        if not api_configurada:
+            st.error("Configure sua chave de API nos secrets.")
+        else:
+            with st.spinner("Desenhando o plano ouro para sua saúde..."):
+                prompt_ideal = f"""
+                Você é um Nutricionista Clínico de Alta Performance, especialista em Resistência à Insulina (RI) e Gestão de Tempo.
+                
+                MISSÃO:
+                Criar um plano alimentar de 24h IDEAL, inteligente e altamente acessível (focado no Guia Alimentar para a População Brasileira de 2021).
+                IGNORAR o estoque do paciente. Sugira as melhores combinações possíveis que ele PODE comprar no supermercado.
+                
+                REGRAS GLICÊMICAS:
+                - Paciente com Resistência à Insulina.
+                - NUNCA sugira carboidratos isolados. Sempre combine com fontes de fibras, proteínas ou gorduras boas para achatar o pico de insulina.
+                
+                AGENDA:
+                Acorda: {hora_acordar.strftime('%H:%M')} | Dorme: {hora_dormir.strftime('%H:%M')} | Trab: {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Trânsito: {transito_inicio.strftime('%H:%M')} às {transito_fim.strftime('%H:%M')} | Treino: {treino_inicio.strftime('%H:%M')} às {treino_fim.strftime('%H:%M')} | Estudo: {estudo_inicio.strftime('%H:%M')} às {estudo_fim.strftime('%H:%M')} | Prep. Máx: {tempo_preparo} min.
+                
+                Retorne EXCLUSIVAMENTE em formato JSON puro. Estrutura:
+                {{
+                  "refeicoes": [
+                    {{ "hora": "HH:MM", "nome": "Nome da Refeição", "ingredientes": "Quais alimentos comprar e misturar", "instrucao_clinica": "Explique o PORQUÊ essa combinação é boa para a Resistência à Insulina e como ela encaixa no horário (ex: trânsito)." }}
+                  ]
+                }}
+                """
+                
+                try:
+                    resposta_ideal = modelo.generate_content(prompt_ideal)
+                    texto_resposta_ideal = resposta_ideal.text.strip()
+                    match_ideal = re.search(r'\{.*\}', texto_resposta_ideal, re.DOTALL)
+                    texto_limpo_ideal = match_ideal.group(0) if match_ideal else texto_resposta_ideal
+                    st.session_state.cardapio_ideal = json.loads(texto_limpo_ideal)
+                except Exception as e:
+                    st.error(f"🚨 Erro na IA: {e}")
+                    
+    # Renderizando o Cardápio Ideal (Apenas leitura/estudo, sem checkboxes)
+    if st.session_state.cardapio_ideal is not None:
+        st.markdown("### ✨ Seu Plano Ideal de Hoje")
+        for ref_ideal in st.session_state.cardapio_ideal.get("refeicoes", []):
+            with st.container(border=True):
+                st.markdown(f"#### ⏰ {ref_ideal['hora']} - {ref_ideal['nome']}")
+                st.write(f"🛒 **O que comer:** {ref_ideal['ingredientes']}")
+                st.info(f"💡 **Visão da Nutri:** {ref_ideal['instrucao_clinica']}")
+
+# --- ABA 5: PAINEL AO VIVO ---
+with tab5:
     hora_agora = datetime.now(fuso_local).strftime("%H:%M")
     
     if st.session_state.cardapio_atual is None:
-        st.warning("Gere a estratégia na aba 'Gerador' para acompanhar seu dia.")
+        st.warning("Vá na aba '🧠 Dia a Dia' para gerar seu cardápio com base no que você já tem em casa.")
     else:
         with st.container(border=True):
             st.markdown(f"### 🎯 Resumo do Dia (Agora: {hora_agora})")
@@ -275,8 +301,8 @@ with tab4:
                         salvar_despensa(st.session_state.despensa)
                         st.rerun()
 
-# --- ABA 5: LISTA DE COMPRAS ---
-with tab5:
+# --- ABA 6: LISTA DE COMPRAS ---
+with tab6:
     with st.container(border=True):
         st.markdown("### 🛒 Inteligência de Reposição")
         st.write("O NutryAi identificou que os seguintes itens acabaram no seu estoque:")
@@ -291,6 +317,6 @@ with tab5:
                 
     with st.container(border=True):
         st.markdown("### 📝 Bloco de Notas do Mercado")
-        anotacoes = st.text_area("O que mais você precisa trazer?", height=120, placeholder="Ex: Temperos, papel toalha, café...")
+        anotacoes = st.text_area("O que mais a 'Nutricionista Ideal' sugeriu que você precisa comprar?", height=120, placeholder="Ex: Inhame, semente de abóbora, sardinha, etc...")
         if st.button("Salvar Anotações Temporárias"):
             st.toast("Suas anotações ficarão na tela enquanto você estiver com o app aberto!")
