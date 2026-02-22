@@ -23,24 +23,24 @@ st.title("🍏 NutryAi")
 st.caption("Seu assistente de nutrição, gestão de tempo e controle glicêmico.")
 
 # --- 2. LÓGICA DE MEMÓRIA E ARQUIVOS ---
-# Nome novo para forçar o recarregamento da nova despensa baseada no Guia Alimentar
-ARQUIVO_DESPENSA = "despensa_ri.csv" 
+# Nome novo para forçar a criação da Despensa Inteligente para Resistência à Insulina
+ARQUIVO_DESPENSA = "despensa_inteligente_ri.csv" 
 
 def carregar_despensa():
     if os.path.exists(ARQUIVO_DESPENSA):
         return pd.read_csv(ARQUIVO_DESPENSA)
     else:
-        # Estoque focado no Guia Alimentar BR (2021) e Resistência à Insulina
+        # Lista de Compras Estratégica para RI (Guia Alimentar BR)
         df = pd.DataFrame({
             "Alimento": [
-                "Ovo", "Peito de Frango", "Patinho Moído", 
-                "Iogurte Natural (Só leite e fermento)", "Aveia em Flocos", 
-                "Semente de Chia", "Arroz Integral", "Feijão Carioca", 
-                "Batata Doce", "Maçã", "Castanha do Pará", "Azeite de Oliva Extravirgem"
+                "Ovos", "Goma de Tapioca", "Pão (Francês ou Integral)", 
+                "Patinho Moído", "Cenoura", "Peito de Frango",
+                "Aveia em Flocos", "Semente de Chia", "Iogurte Natural", 
+                "Maçã", "Arroz e Feijão (Prontos)", "Azeite de Oliva Extravirgem"
             ],
-            "Quantidade": [24.0, 1000.0, 500.0, 500.0, 400.0, 200.0, 1000.0, 1000.0, 1000.0, 10.0, 150.0, 1.0],
-            "Unidade": ["un", "g", "g", "g", "g", "g", "g", "g", "g", "un", "g", "vidro"],
-            "Pronto/Rápido": ["Sim", "Não", "Não", "Sim", "Sim", "Sim", "Não", "Não", "Não", "Sim", "Sim", "Sim"]
+            "Quantidade": [30.0, 500.0, 4.0, 500.0, 3.0, 500.0, 300.0, 150.0, 500.0, 8.0, 1000.0, 1.0],
+            "Unidade": ["un", "g", "un", "g", "un", "g", "g", "g", "g", "un", "g", "vidro"],
+            "Pronto/Rápido": ["Sim", "Sim", "Sim", "Não", "Sim", "Não", "Sim", "Sim", "Sim", "Sim", "Sim", "Sim"]
         })
         df.to_csv(ARQUIVO_DESPENSA, index=False)
         return df
@@ -113,7 +113,7 @@ with tab1:
 # --- ABA 2: ESTOQUE (Despensa) ---
 with tab2:
     with st.container(border=True):
-        st.subheader("Gerenciar Estoque")
+        st.subheader("Gerenciar Estoque / Lista de Compras")
         
         col_add, col_rem = st.columns(2)
         
@@ -151,26 +151,32 @@ with tab2:
     df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
     st.dataframe(df_visual[["Alimento", "Disponível", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
 
-# --- ABA 3: MOTOR DA IA (PERFIL CLÍNICO: RESISTÊNCIA À INSULINA) ---
+# --- ABA 3: MOTOR DA IA (PERFIL CLÍNICO INTELIGENTE) ---
 with tab3:
-    st.info("A IA mapeará seus blocos ocupados e criará refeições de baixo índice glicêmico com o que tem em casa.")
+    st.info("A IA mapeará seus blocos ocupados e fará as combinações perfeitas para controlar sua insulina.")
     st.write("") 
     
     if st.button("⚡ Gerar Cardápio Inteligente", use_container_width=True, type="primary"):
         if not api_configurada:
             st.error("Configure sua chave de API nos secrets.")
         else:
-            with st.spinner("Analisando estoque e calculando impacto glicêmico..."):
+            with st.spinner("Analisando estoque e calculando sinergia dos alimentos..."):
                 despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
                 dados_despensa = despensa_ativa.to_dict(orient="records")
                 
                 prompt = f"""
-                Você é um Nutricionista Clínico de Alta Performance, especialista em Gestão de Tempo e tratamento de Resistência à Insulina.
+                Você é um Nutricionista Clínico de Alta Performance, especialista em Gestão de Tempo e tratamento de Resistência à Insulina (RI).
                 
                 PERFIL DO PACIENTE E DIRETRIZES:
                 - Condição Clínica: Resistência à Insulina.
                 - Diretriz Base: Guia Alimentar para a População Brasileira de 2021 (foco em alimentos in natura e minimamente processados).
-                - Regra Glicêmica ABSOLUTA: O paciente NUNCA deve consumir carboidratos isolados. Sempre combine fontes de carboidrato com fibras (ex: aveia, chia), gorduras boas (ex: castanhas, azeite) ou proteínas (ex: ovo, iogurte, frango) para achatar a curva de insulina.
+                
+                REGRA GLICÊMICA ABSOLUTA (SINERGIA ALIMENTAR):
+                O paciente NUNCA deve consumir carboidratos "solteiros" (puros). Você deve OBRIGATORIAMENTE fazer estes casamentos inteligentes:
+                - Tapioca? Misture com Ovo para fazer Crepioca, ou recheie com Frango.
+                - Pão? Adicione Ovos mexidos ou Frango desfiado.
+                - Patinho Moído? Adicione Cenoura ralada para aumentar a fibra da refeição.
+                - Fruta (Maçã)? Adicione Aveia, Chia ou Iogurte para achatar a curva de insulina.
                 
                 AGENDA DE BLOCOS OCUPADOS DO PACIENTE:
                 - ☀️ Acorda às: {hora_acordar.strftime('%H:%M')} | 🌙 Dorme às: {hora_dormir.strftime('%H:%M')}
@@ -182,8 +188,8 @@ with tab3:
                 
                 REGRAS DE LOGÍSTICA:
                 1. NÃO agende preparos complexos durante os blocos de Trânsito, Treino ou Estudo.
-                2. Use o Bloco de Trânsito apenas para alimentos sinalizados como "Pronto/Rápido: Sim" (ex: "Coma a maçã com castanhas no carro").
-                3. Refeições que exigem fogão (almoço/jantar com arroz, feijão, carnes) devem estar no tempo LIVRE.
+                2. Use o Bloco de Trânsito apenas para alimentos sinalizados como "Pronto/Rápido: Sim" (ex: "Coma a maçã com iogurte antes de dirigir").
+                3. Refeições que exigem fogão devem estar no tempo LIVRE.
                 
                 DESPENSA DISPONÍVEL (Estrito a estes ingredientes): {dados_despensa}
                 
