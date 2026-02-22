@@ -10,84 +10,101 @@ from PIL import Image
 # --- 1. CONFIGURAÇÃO DA PÁGINA (NutryAi) ---
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered") 
 
-# Injetando CSS SUPER CUSTOMIZADO (Estilo WhatsApp / iOS)
+# Injetando CSS SUPER CUSTOMIZADO (Estilo Nativo iOS)
 st.markdown("""
     <style>
-    /* Esconder menu nativo */
+    /* 1. Esconder menu nativo e ajustar espaçamentos */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
-    .block-container {padding-top: 1rem; padding-bottom: 5rem;}
+    .block-container {padding-top: 2rem; padding-bottom: 5rem; max-width: 600px;}
     
-    /* 1. Título Centralizado e Estilizado */
+    /* 2. Fundo Cinza Claro do iOS e Fonte SF Pro */
+    .stApp {
+        background-color: #F2F2F7 !important;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+    }
+
+    /* 3. Título Estilo iOS (Large Title) */
     .app-header {
-        text-align: center;
+        text-align: left;
         padding-bottom: 10px;
+        padding-top: 10px;
     }
     .app-header h1 {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        color: #128C7E; /* Verde escuro Zap */
+        color: #000000;
         font-weight: 800;
-        font-size: 2.5rem;
+        font-size: 2.2rem;
+        letter-spacing: -0.5px;
         margin-bottom: 0px;
     }
     .app-header p {
-        color: #667781;
-        font-size: 0.95rem;
+        color: #8E8E93;
+        font-size: 1rem;
         margin-top: -10px;
+        font-weight: 500;
     }
 
-    /* 2. Abas Fixas (Sticky Tabs) */
+    /* 4. Abas Fixas Estilo Segmented Control Apple */
     div[data-testid="stTabs"] > div:first-child {
         position: -webkit-sticky;
         position: sticky;
         top: 0px;
         z-index: 999;
-        background-color: var(--primary-background-color);
+        background-color: rgba(242, 242, 247, 0.9); /* Translucidez estilo iOS */
+        backdrop-filter: blur(10px);
         padding-top: 10px;
         padding-bottom: 10px;
-        border-bottom: 1px solid rgba(128,128,128,0.2);
+        border-bottom: 1px solid rgba(60, 60, 67, 0.1);
     }
     
-    /* 3. Botões "Fat" Arredondados (Estilo WhatsApp) */
-    div[data-testid="stButton"] button {
-        border-radius: 24px !important; /* Bordas bem redondas */
-        height: 54px !important; /* Mais gordinho, ideal para o dedo no celular */
-        font-weight: 700 !important;
-        font-size: 16px !important;
+    /* 5. Cartões Brancos Flutuantes (Cards do iOS) */
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {
+        background-color: #FFFFFF !important;
+        border-radius: 14px !important;
         border: none !important;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
+        box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.04) !important;
+        padding: 15px !important;
+    }
+    
+    /* 6. Botões Estilo Apple (Azul e com bordas 14px) */
+    div[data-testid="stButton"] button {
+        border-radius: 14px !important; 
+        height: 50px !important;
+        font-weight: 600 !important;
+        font-size: 17px !important;
+        border: none !important;
         transition: all 0.2s ease-in-out !important;
     }
     
-    /* Cor do Botão Primário (Verde WhatsApp) */
+    /* Cor do Botão Primário (iOS Blue) */
     div[data-testid="stButton"] button[kind="primary"] {
-        background-color: #25D366 !important; 
+        background-color: #007AFF !important; 
         color: white !important;
     }
     div[data-testid="stButton"] button[kind="primary"]:hover {
-        background-color: #128C7E !important;
-        transform: scale(1.02);
+        background-color: #0062CC !important;
+        transform: scale(0.98); /* Efeito de apertar ao invés de crescer */
     }
 
-    /* 4. Estilizar os balões do Chat para ficarem mais suaves */
+    /* 7. Balões do Chat Estilo iMessage */
     div[data-testid="stChatMessage"] {
         border-radius: 18px !important;
-        padding: 10px 15px !important;
-        background-color: rgba(37, 211, 102, 0.05) !important; /* Fundo esverdeado bem clarinho */
-        border: 1px solid rgba(37, 211, 102, 0.1) !important;
+        padding: 12px 16px !important;
+        border: none !important;
     }
+    /* Mensagem do Assistente (Cinza claro do iMessage) */
+    div[data-testid="stChatMessage"]:nth-child(even) {
+        background-color: #E9E9EB !important; 
+        color: black !important;
+    }
+    /* Mensagem do Usuário (Azul do iMessage) - O Streamlit não separa bem nativamente, mas aplicamos um fundo neutro geral */
     
-    /* Ocultar elementos desnecessários de UI nos checkboxes */
-    div[data-testid="stCheckbox"] label span {
-        font-size: 1.1rem !important;
-        font-weight: bold;
-    }
     </style>
     
     <div class="app-header">
-        <h1>🍏 NutryAi</h1>
-        <p>Seu assistente flexível de nutrição inteligente</p>
+        <h1>NutryAi 🍏</h1>
+        <p>Sua rotina flexível e inteligente</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -140,12 +157,12 @@ if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 
 # --- 5. INTERFACE VISUAL (ABAS) ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🕒 Agenda", "📦 Estoque & Compras", "🍽️ Seu Dia", "👩‍⚕️ Plano Ideal", "💬 Chat"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🕒 Agenda", "📦 Estoque", "🍽️ Seu Dia", "👩‍⚕️ Plano Ideal", "💬 Chat"])
 
 # --- ABA 1: ROTINA EM BLOCOS DE TEMPO ---
 with tab1:
     with st.container(border=True):
-        st.subheader("Blocos de Tempo Ocupado")
+        st.subheader("Blocos Ocupados")
         
         c1, c2 = st.columns(2)
         hora_acordar = c1.time_input("☀️ Acordar", time(6, 30))
@@ -156,8 +173,8 @@ with tab1:
         trab_fim = c4.time_input("💼 Trab. Fim", time(17, 30), key="t_f")
         
         c5, c6 = st.columns(2)
-        transito_inicio = c5.time_input("🚗 Trânsito Início", time(17, 30), key="tr_i")
-        transito_fim = c6.time_input("🏁 Trânsito Fim", time(18, 30), key="tr_f")
+        transito_inicio = c5.time_input("🚗 Trâns. Início", time(17, 30), key="tr_i")
+        transito_fim = c6.time_input("🏁 Trâns. Fim", time(18, 30), key="tr_f")
         
         c7, c8 = st.columns(2)
         treino_inicio = c7.time_input("💪 Treino Início", time(19, 0), key="tre_i")
@@ -168,40 +185,40 @@ with tab1:
         estudo_fim = c10.time_input("📝 Estudo Fim", time(22, 0), key="est_f")
         
         st.divider()
-        tempo_preparo = st.slider("⏱️ Tempo livre para cozinhar (minutos/dia)", 0, 120, 30)
+        tempo_preparo = st.slider("⏱️ Tempo para cozinhar (min/dia)", 0, 120, 30)
         
-        if st.button("💾 Salvar Horários", use_container_width=True, type="primary"):
+        if st.button("Salvar Horários", use_container_width=True, type="primary"):
             st.session_state.cardapio_atual = None
             st.session_state.cardapio_ideal = None 
             st.session_state.consumidos = set()
-            st.success("✅ Agenda salva! A IA já ajustou seu relógio interno.")
+            st.success("✅ Ajustes salvos no sistema.")
 
 # --- ABA 2: ESTOQUE & COMPRAS ---
 with tab2:
-    st.markdown("### 🛒 Seu Estoque Atual")
+    st.markdown("### 🛒 Seu Estoque")
     col_add, col_rem = st.columns(2)
     with col_add:
         with st.popover("➕ Adicionar", use_container_width=True):
-            novo_nome = st.text_input("Nome do Alimento")
+            novo_nome = st.text_input("Alimento")
             nova_qtd = st.number_input("Qtd", min_value=0.0, step=1.0)
             nova_unidade = st.selectbox("Medida", ["g", "kg", "ml", "L", "un", "dose", "colher"])
-            novo_pronto = st.radio("Preparo Rápido/Lanche?", ["Não", "Sim"], horizontal=True)
-            if st.button("Salvar Item", type="primary"):
+            novo_pronto = st.radio("Preparo Rápido?", ["Não", "Sim"], horizontal=True)
+            if st.button("Salvar", type="primary"):
                 if novo_nome:
                     novo_item = pd.DataFrame({"Alimento": [novo_nome], "Quantidade": [nova_qtd], "Unidade": [nova_unidade], "Pronto/Rápido": [novo_pronto]})
                     st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
                     salvar_despensa(st.session_state.despensa)
-                    st.toast("✅ Item guardado na despensa!")
+                    st.toast("✅ Item guardado!")
                     st.rerun()
     
     with col_rem:
         with st.popover("🗑️ Remover", use_container_width=True):
             lista_alimentos = st.session_state.despensa["Alimento"].tolist()
-            item_remover = st.selectbox("Qual item acabou?", lista_alimentos)
-            if st.button("Excluir Item"):
+            item_remover = st.selectbox("Apagar:", lista_alimentos)
+            if st.button("Excluir", type="primary"):
                 st.session_state.despensa = st.session_state.despensa[st.session_state.despensa["Alimento"] != item_remover]
                 salvar_despensa(st.session_state.despensa)
-                st.toast("🗑️ Item removido com sucesso!")
+                st.toast("🗑️ Item removido!")
                 st.rerun()
 
     df_visual = st.session_state.despensa.copy()
@@ -215,26 +232,26 @@ with tab2:
     
     estoque_zerado = st.session_state.despensa[st.session_state.despensa["Quantidade"] <= 0]
     if estoque_zerado.empty:
-        st.info("Tudo certo! Nenhuma urgência de mercado por enquanto.")
+        st.info("Tudo abastecido por enquanto.")
     else:
-        st.warning("⚠️ Atenção! Você precisa repor:")
+        st.warning("Atenção! Repor:")
         for index, row in estoque_zerado.iterrows():
             st.write(f"- {row['Alimento']}")
             
-    anotacoes = st.text_area("O que mais precisa trazer da rua?", height=80, placeholder="Ex: Papel toalha, adoçante, café...")
+    anotacoes = st.text_area("O que mais precisa trazer?", height=80, placeholder="Ex: Adoçante, café...")
     if st.button("Salvar Anotações", use_container_width=True): 
-        st.toast("✅ Anotações salvas no bloco de notas!")
+        st.toast("✅ Anotações salvas!")
 
 # --- ABA 3: SEU DIA (GERADOR + AO VIVO) ---
 with tab3:
-    st.markdown("### 🍽️ Tática de Guerra para Hoje")
-    st.write("Crie seu plano de ataque usando **apenas** o que tem na geladeira e no armário.")
+    st.markdown("### 🍽️ Plano de Ação")
+    st.write("Baseado no que você tem em casa agora.")
     
-    if st.button("⚡ Gerar Cardápio de Hoje", use_container_width=True, type="primary"):
+    if st.button("Gerar Cardápio de Hoje", use_container_width=True, type="primary"):
         if not api_configurada:
-            st.error("⚠️ Ops! Configure sua chave de API nos secrets primeiro.")
+            st.error("⚠️ Configure a chave de API.")
         else:
-            with st.spinner("Analisando estoque e calculando seu dia..."):
+            with st.spinner("Calculando logística..."):
                 despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
                 prompt = f"""
                 Você é um Nutricionista Clínico especialista em Resistência à Insulina (RI).
@@ -251,16 +268,16 @@ with tab3:
                     st.session_state.cardapio_atual = json.loads(texto_limpo)
                     st.session_state.consumidos = set()
                     st.balloons() 
-                    st.toast("✅ Cardápio tático montado! Veja a lista abaixo.")
+                    st.toast("✅ Plano pronto!")
                 except Exception as e:
-                    st.error(f"🚨 Houve um pequeno tropeço na IA: {e}")
+                    st.error(f"🚨 Erro na IA: {e}")
 
     if st.session_state.cardapio_atual is not None:
         st.divider()
         hora_agora = datetime.now(fuso_local).strftime("%H:%M")
         
         with st.container(border=True):
-            st.markdown(f"#### 🎯 Seu Progresso (Agora: {hora_agora})")
+            st.markdown(f"#### 🎯 Progresso (Agora: {hora_agora})")
             resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("🔥 Kcal", resumo.get('calorias_totais', '0'))
@@ -282,26 +299,26 @@ with tab3:
                     st.write(f"🍽️ {ref['ingredientes']}")
                     st.caption(f"💡 {ref.get('instrucao_preparo', '')}")
                 with col_check:
-                    concluido = st.checkbox("Baixa", key=f"check_{i}", value=ja_consumido, disabled=ja_consumido)
+                    concluido = st.checkbox("Feito", key=f"check_{i}", value=ja_consumido, disabled=ja_consumido)
                     if concluido and not ja_consumido:
                         st.session_state.consumidos.add(id_ref)
                         for item in ref.get("uso_despensa", []):
                             idx = st.session_state.despensa.index[st.session_state.despensa['Alimento'] == item.get("nome_exato")].tolist()
                             if idx: st.session_state.despensa.at[idx[0], 'Quantidade'] -= float(item.get("qtd_descontada", 0))
                         salvar_despensa(st.session_state.despensa)
-                        st.toast(f"🎉 Mandou bem! Refeição '{ref['nome']}' concluída.")
+                        st.toast(f"🎉 Refeição concluída!")
                         st.rerun()
 
 # --- ABA 4: PLANO IDEAL (METAS FLEXÍVEIS) ---
 with tab4:
-    st.markdown("### 👩‍⚕️ Estrutura Flexível Ouro")
-    st.write("A Nutri ignora o que você tem em casa e te entrega a estrutura perfeita para dominar a insulina. Use para fazer a lista do mercado de amanhã!")
+    st.markdown("### 👩‍⚕️ Estrutura Ouro")
+    st.write("A Nutri te entrega a estrutura perfeita para dominar a insulina. Use para fazer a lista do mercado!")
     
-    if st.button("✨ Descobrir Meu Plano Ideal", use_container_width=True):
+    if st.button("Descobrir Meu Plano Ideal", use_container_width=True, type="primary"):
         if not api_configurada:
-            st.error("⚠️ Ops! Configure sua chave de API nos secrets primeiro.")
+            st.error("⚠️ Configure a chave de API.")
         else:
-            with st.spinner("Desenhando seu mapa nutricional perfeito..."):
+            with st.spinner("Calculando..."):
                 prompt_ideal = f"""
                 Nutricionista especialista em RI e Dieta Flexível. Crie um PLANO DE METAS (Macros) e GUIA DE ESTRUTURAÇÃO DE PRATOS. IGNORAR ESTOQUE.
                 REGRAS: Carbo Complexo SEMPRE com Proteína/Gordura Boa. Nenhuma salada matinal.
@@ -312,9 +329,9 @@ with tab4:
                     resposta_ideal = modelo.generate_content(prompt_ideal)
                     texto_limpo_ideal = re.search(r'\{.*\}', resposta_ideal.text.strip(), re.DOTALL).group(0) if re.search(r'\{.*\}', resposta_ideal.text.strip(), re.DOTALL) else resposta_ideal.text.strip()
                     st.session_state.cardapio_ideal = json.loads(texto_limpo_ideal)
-                    st.toast("✨ Seu Mapa Nutricional Ouro está pronto para leitura!")
+                    st.toast("✨ Plano Ouro gerado!")
                 except Exception as e:
-                    st.error(f"🚨 Tropeço na IA: {e}")
+                    st.error(f"🚨 Erro: {e}")
                     
     if st.session_state.cardapio_ideal:
         metas = st.session_state.cardapio_ideal.get("metas_diarias", {})
@@ -330,35 +347,35 @@ with tab4:
                 st.markdown(f"#### ⏰ {ref_ideal.get('hora', '')} - {ref_ideal.get('nome', '')}")
                 st.caption(f"**🎯 Alvo:** {ref_ideal.get('alvo_macros', '')}")
                 st.markdown(f"**🧩 Montagem:** {ref_ideal.get('estrutura_prato', '')}")
-                st.markdown(f"**💡 Opções Rápidas:** {ref_ideal.get('sugestoes_flexiveis', '')}")
-                st.info(f"👩‍⚕️ **Explicação Clínica:** {ref_ideal.get('instrucao_clinica', '')}")
+                st.markdown(f"**💡 Opções:** {ref_ideal.get('sugestoes_flexiveis', '')}")
+                st.info(f"👩‍⚕️ **Clínica:** {ref_ideal.get('instrucao_clinica', '')}")
 
 # --- ABA 5: CHAT COM A NUTRICIONISTA ---
 with tab5:
     st.markdown("### 💬 Chat com a Nutri")
-    st.write("Dúvidas no mercado? Restaurante a quilo? Envie a foto e tire a prova real.")
+    st.write("Dúvidas no mercado? Restaurante a quilo? Mande a foto.")
 
-    foto_upload = st.file_uploader("📸 Enviar foto do prato ou rótulo", type=["jpg", "jpeg", "png"])
+    foto_upload = st.file_uploader("📸 Foto do prato ou rótulo", type=["jpg", "jpeg", "png"])
 
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    prompt_chat = st.chat_input("Ex: Nutri, posso trocar o arroz por batata doce agora?")
+    prompt_chat = st.chat_input("Mensagem...")
     
     if prompt_chat:
         if not api_configurada:
-            st.error("⚠️ Configure sua chave de API primeiro.")
+            st.error("⚠️ Configure a API.")
         else:
             st.session_state.chat_history.append({"role": "user", "content": prompt_chat})
             with st.chat_message("user"):
                 st.markdown(prompt_chat)
                 if foto_upload:
                     st.image(foto_upload, width=250)
-                    st.caption("📷 Foto enviada para a central.")
+                    st.caption("📷 Foto enviada.")
 
             with st.chat_message("assistant"):
-                with st.spinner("A Nutri está digitando um áudio... ops, digitando texto..."):
+                with st.spinner("A Nutri está digitando..."):
                     try:
                         conteudo_ia = [
                             "Você é a NutryAi, Nutricionista Clínica especialista em Resistência à Insulina e Dieta Flexível. Seja prestativa, use tom amigável. Avalie impactos na insulina se o paciente perguntar sobre alimentos ou fotos.",
@@ -373,5 +390,5 @@ with tab5:
                         st.session_state.chat_history.append({"role": "assistant", "content": resposta_chat.text})
                     
                     except Exception as e:
-                        st.error(f"Erro no sinal com a Nutri: {e}")
+                        st.error(f"Erro na resposta: {e}")
 
