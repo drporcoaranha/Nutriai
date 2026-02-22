@@ -5,6 +5,7 @@ import google.generativeai as genai
 import json
 import os
 import re
+from PIL import Image # NOVO: Biblioteca para leitura de imagens no Chat
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (NutryAi) ---
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered") 
@@ -67,15 +68,17 @@ if 'cardapio_ideal' not in st.session_state:
     st.session_state.cardapio_ideal = None
 if 'consumidos' not in st.session_state:
     st.session_state.consumidos = set()
+if 'chat_history' not in st.session_state: # NOVO: Memória do Chat
+    st.session_state.chat_history = []
 
 # --- 5. INTERFACE VISUAL (ABAS) ---
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🕒 Agenda", "📦 Estoque", "🧠 Dia a Dia", "👩‍⚕️ Nutri", "🔴 Ao Vivo", "📝 Compras"])
+# Adicionado a aba de Chat no meio para ficar mais acessível
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["🕒 Agenda", "📦 Estoque", "🧠 Dia a Dia", "👩‍⚕️ Plano", "💬 Chat", "🔴 Ao Vivo", "🛒 Compras"])
 
 # --- ABA 1: ROTINA EM BLOCOS DE TEMPO ---
 with tab1:
     with st.container(border=True):
         st.subheader("Blocos de Tempo Ocupado")
-        st.write("Defina seus horários. A IA usará os **buracos** da sua agenda para encaixar as refeições.")
         
         st.markdown("#### ☀️ Descanso")
         c1, c2 = st.columns(2)
@@ -114,16 +117,15 @@ with tab1:
 # --- ABA 2: ESTOQUE (Despensa) ---
 with tab2:
     with st.container(border=True):
-        st.subheader("Gerenciar Estoque / Lista de Compras")
-        
+        st.subheader("Gerenciar Estoque")
         col_add, col_rem = st.columns(2)
         
         with col_add:
-            with st.popover("➕ Novo Alimento", use_container_width=True):
+            with st.popover("➕ Novo", use_container_width=True):
                 novo_nome = st.text_input("Nome")
                 nova_qtd = st.number_input("Qtd", min_value=0.0, step=1.0)
                 nova_unidade = st.selectbox("Medida", ["g", "kg", "ml", "L", "un", "dose", "colher"])
-                novo_pronto = st.radio("Preparo Rápido/Consumo no Carro?", ["Não", "Sim"], horizontal=True)
+                novo_pronto = st.radio("Preparo Rápido?", ["Não", "Sim"], horizontal=True)
                 
                 if st.button("Adicionar"):
                     if novo_nome:
@@ -135,66 +137,39 @@ with tab2:
         with col_rem:
             with st.popover("🗑️ Remover", use_container_width=True):
                 lista_alimentos = st.session_state.despensa["Alimento"].tolist()
-                item_remover = st.selectbox("Selecione para apagar:", lista_alimentos)
-                if st.button("Excluir Item"):
+                item_remover = st.selectbox("Apagar:", lista_alimentos)
+                if st.button("Excluir"):
                     st.session_state.despensa = st.session_state.despensa[st.session_state.despensa["Alimento"] != item_remover]
                     salvar_despensa(st.session_state.despensa)
                     st.rerun()
 
-    st.write("📋 **Seu Estoque Atual:**")
     df_visual = st.session_state.despensa.copy()
-    
     def formatar_estoque(row):
-        if row["Quantidade"] <= 0:
-            return "❌ ESGOTADO"
-        return f"{row['Quantidade']} {row['Unidade']}"
-        
+        return "❌ ESGOTADO" if row["Quantidade"] <= 0 else f"{row['Quantidade']} {row['Unidade']}"
     df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
     st.dataframe(df_visual[["Alimento", "Disponível", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
 
 # --- ABA 3: MOTOR DA IA (CENÁRIO REAL / DIA A DIA) ---
 with tab3:
-    st.info("A IA vai cruzar seus horários com o que você **TEM HOJE NO ESTOQUE** e montar sua logística para dar baixa.")
-    st.write("") 
-    
+    st.info("A IA vai cruzar seus horários com o que você **TEM HOJE NO ESTOQUE**.")
     if st.button("⚡ Gerar Cardápio Baseado no Estoque", use_container_width=True, type="primary"):
         if not api_configurada:
             st.error("Configure sua chave de API nos secrets.")
         else:
-            with st.spinner("Analisando estoque e calculando sinergia dos alimentos..."):
+            with st.spinner("Analisando estoque e calculando sinergia..."):
                 despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
-                dados_despensa = despensa_ativa.to_dict(orient="records")
-                
                 prompt = f"""
                 Você é um Nutricionista Clínico especialista em Resistência à Insulina (RI).
-                Sua missão é criar o cardápio real de hoje usando APENAS O ESTOQUE DO PACIENTE.
-                
-                REGRA GLICÊMICA: NUNCA sugira carboidratos "solteiros" (puros). Sempre faça casamentos (Tapioca com Ovo, Pão com Frango, Fruta com Fibras/Iogurte).
-                
-                AGENDA:
-                Acorda: {hora_acordar.strftime('%H:%M')} | Dorme: {hora_dormir.strftime('%H:%M')} | Trab: {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Trânsito: {transito_inicio.strftime('%H:%M')} às {transito_fim.strftime('%H:%M')} | Treino: {treino_inicio.strftime('%H:%M')} às {treino_fim.strftime('%H:%M')} | Estudo: {estudo_inicio.strftime('%H:%M')} às {estudo_fim.strftime('%H:%M')} | Prep. Máx: {tempo_preparo} min.
-                
-                REGRAS:
-                1. Trânsito/Treino/Estudo = Apenas alimentos "Pronto/Rápido: Sim".
-                2. Refeições que exigem fogão vão para os horários livres.
-                3. CULTURA BRASILEIRA (IMPORTANTE): O café da manhã brasileiro não tem salada ou folhas verdes. NUNCA sugira salada verde, espinafre ou alface de manhã. Para adicionar fibras na refeição matinal, sugira aveia, semente de chia, linhaça ou frutas (ex: mamão, maçã).
-                
-                DESPENSA DISPONÍVEL (Estrito a estes): {dados_despensa}
-                
-                Retorne EXCLUSIVAMENTE em formato JSON puro. Estrutura:
-                {{
-                  "resumo_diario": {{ "calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g" }},
-                  "refeicoes": [
-                    {{ "hora": "HH:MM", "nome": "Nome do Prato", "ingredientes": "Qtd e Ingrediente", "instrucao_preparo": "Instrução de preparo", "macros": {{ "calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g" }}, "uso_despensa": [ {{ "nome_exato": "NOME EXATO DO ALIMENTO NA DESPENSA", "qtd_descontada": 150 }} ] }}
-                  ]
-                }}
+                Crie o cardápio real de hoje usando APENAS O ESTOQUE.
+                REGRA: NUNCA sugira carboidratos "solteiros".
+                REGRAS CULTURAIS: NUNCA sugira salada verde de manhã. Use aveia/chia/fruta para bater fibra matinal.
+                AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Prep. Máx: {tempo_preparo} min.
+                ESTOQUE: {despensa_ativa.to_dict(orient="records")}
+                Retorne JSON: {{"resumo_diario": {{"calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "ingredientes": "Qtd", "instrucao_preparo": "Instrução", "macros": {{"calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g"}}, "uso_despensa": [{{"nome_exato": "NOME", "qtd_descontada": 150}}]}}]}}
                 """
-                
                 try:
                     resposta = modelo.generate_content(prompt)
-                    texto_resposta = resposta.text.strip()
-                    match = re.search(r'\{.*\}', texto_resposta, re.DOTALL)
-                    texto_limpo = match.group(0) if match else texto_resposta
+                    texto_limpo = re.search(r'\{.*\}', resposta.text.strip(), re.DOTALL).group(0) if re.search(r'\{.*\}', resposta.text.strip(), re.DOTALL) else resposta.text.strip()
                     st.session_state.cardapio_atual = json.loads(texto_limpo)
                     st.session_state.consumidos = set()
                     st.rerun()
@@ -203,97 +178,99 @@ with tab3:
 
 # --- ABA 4: A NOVA CONSULTA (METAS DE MACROS FLEXÍVEIS) ---
 with tab4:
-    st.info("A Nutricionista definiu **Metas de Macros** e **Porções Flexíveis** para a sua rotina, para você não ficar preso a um cardápio engessado.")
-    
+    st.info("A Nutricionista definiu **Metas de Macros** e **Porções Flexíveis** para a sua rotina ideal.")
     if st.button("👩‍⚕️ Gerar Estratégia Flexível", use_container_width=True):
         if not api_configurada:
-            st.error("Configure sua chave de API nos secrets.")
+            st.error("Configure API nos secrets.")
         else:
-            with st.spinner("Calculando distribuição de macros e estratégias de porções..."):
+            with st.spinner("Calculando distribuição de macros..."):
                 prompt_ideal = f"""
-                Você é um Nutricionista Clínico de Alta Performance, especialista em Resistência à Insulina (RI), Dieta Flexível e Gestão de Tempo.
-                
-                MISSÃO:
-                Não crie um cardápio engessado. Crie um PLANO DE METAS DIÁRIAS (Macros) e um GUIA DE ESTRUTURAÇÃO DE PRATOS por refeição.
-                A ideia é dar liberdade ao paciente para escolher os alimentos, respeitando os macros do horário e o limite de tempo para cozinhar.
-                
-                DIRETRIZES PARA RESISTÊNCIA À INSULINA E CULTURA BRASILEIRA:
-                - Foco em fibras altas (mínimo 30g/dia).
-                - Estrutura obrigatória das refeições: Carboidrato Complexo SEMPRE deve estar acompanhado de Proteína Magra ou Gordura Boa.
-                - CULTURA BRASILEIRA (IMPORTANTE): NUNCA sugira saladas, folhas verdes (espinafre, couve, rúcula, alface) ou pratos de almoço no café da manhã. O brasileiro come pão, tapioca, ovos, iogurte, frutas, queijo e aveia. Para adicionar fibras pela manhã, use sementes (chia, psyllium) ou farelo de aveia.
-                
-                AGENDA:
-                Acorda: {hora_acordar.strftime('%H:%M')} | Dorme: {hora_dormir.strftime('%H:%M')} | Trab: {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Trânsito: {transito_inicio.strftime('%H:%M')} às {transito_fim.strftime('%H:%M')} | Treino: {treino_inicio.strftime('%H:%M')} às {treino_fim.strftime('%H:%M')} | Estudo: {estudo_inicio.strftime('%H:%M')} às {estudo_fim.strftime('%H:%M')} | Tempo total para cozinhar: {tempo_preparo} min/dia.
-                
-                REGRAS DE LOGÍSTICA:
-                Refeições em blocos de trânsito ou pouco tempo DEVEM ter opções de sugestões que não exigem fogão ou são transportáveis.
-                
-                Retorne EXCLUSIVAMENTE em formato JSON puro. Estrutura EXATA esperada:
-                {{
-                  "metas_diarias": {{
-                    "calorias": "2000 kcal",
-                    "carboidratos": "150g",
-                    "proteinas": "140g",
-                    "gorduras": "60g",
-                    "fibras": "30g"
-                  }},
-                  "refeicoes": [
-                    {{
-                      "hora": "HH:MM",
-                      "nome": "Nome da Refeição",
-                      "alvo_macros": "Carbos: 30g | Prot: 25g | Gord: 10g",
-                      "estrutura_prato": "A regra de porções (Ex: 1 porção de carbo complexo + 1 a 2 porções de proteína magra + 1 porção de fibras)",
-                      "sugestoes_flexiveis": "Dê 3 opções práticas e deliciosas que batam esses macros e caibam no tempo disponível.",
-                      "instrucao_clinica": "Explique brevemente por que essa proporção neste horário controla a insulina ou ajuda na logística do dia."
-                    }}
-                  ]
-                }}
+                Nutricionista especialista em RI e Dieta Flexível. Crie um PLANO DE METAS (Macros) e GUIA DE ESTRUTURAÇÃO DE PRATOS. IGNORAR ESTOQUE.
+                REGRAS: Carbo Complexo SEMPRE com Proteína/Gordura Boa. Nenhuma salada matinal.
+                AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Tempo cozinhar: {tempo_preparo} min.
+                Retorne JSON: {{"metas_diarias": {{"calorias": "2000 kcal", "carboidratos": "150g", "proteinas": "140g", "gorduras": "60g", "fibras": "30g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "alvo_macros": "Carbos: 30g | Prot: 25g", "estrutura_prato": "Regra de porções", "sugestoes_flexiveis": "3 opções práticas", "instrucao_clinica": "Explicação clínica"}}]}}
                 """
-                
                 try:
                     resposta_ideal = modelo.generate_content(prompt_ideal)
-                    texto_resposta_ideal = resposta_ideal.text.strip()
-                    match_ideal = re.search(r'\{.*\}', texto_resposta_ideal, re.DOTALL)
-                    texto_limpo_ideal = match_ideal.group(0) if match_ideal else texto_resposta_ideal
+                    texto_limpo_ideal = re.search(r'\{.*\}', resposta_ideal.text.strip(), re.DOTALL).group(0) if re.search(r'\{.*\}', resposta_ideal.text.strip(), re.DOTALL) else resposta_ideal.text.strip()
                     st.session_state.cardapio_ideal = json.loads(texto_limpo_ideal)
                 except Exception as e:
                     st.error(f"🚨 Erro na IA: {e}")
                     
-    # Renderizando a Estratégia Flexível
-    if st.session_state.cardapio_ideal is not None:
+    if st.session_state.cardapio_ideal:
         metas = st.session_state.cardapio_ideal.get("metas_diarias", {})
-        
-        st.markdown("### 🎯 Suas Metas Diárias de Saúde")
-        st.write("Limite de macros para controlar sua curva glicêmica de forma saudável:")
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("🔥 Kcal", metas.get("calorias", "0"))
-        c2.metric("🌾 Carbos", metas.get("carboidratos", "0g"))
+        c2.metric("🌾 Carb", metas.get("carboidratos", "0g"))
         c3.metric("🥩 Prot", metas.get("proteinas", "0g"))
         c4.metric("🥑 Gord", metas.get("gorduras", "0g"))
-        c5.metric("🥦 Fibras", metas.get("fibras", "0g"))
-        
+        c5.metric("🥦 Fibra", metas.get("fibras", "0g"))
         st.divider()
-        st.markdown("### 🍽️ Estrutura Flexível de Refeições")
-        
         for ref_ideal in st.session_state.cardapio_ideal.get("refeicoes", []):
             with st.container(border=True):
-                st.markdown(f"#### ⏰ {ref_ideal.get('hora', '')} - {ref_ideal.get('nome', '')}")
-                st.caption(f"**🎯 Alvo desta refeição:** {ref_ideal.get('alvo_macros', '')}")
-                
-                st.markdown(f"**🧩 Como montar seu prato:** {ref_ideal.get('estrutura_prato', '')}")
-                st.markdown(f"**💡 Opções Práticas (Baseadas no seu tempo):** {ref_ideal.get('sugestoes_flexiveis', '')}")
-                
-                st.info(f"👩‍⚕️ **Visão Clínica:** {ref_ideal.get('instrucao_clinica', '')}")
+                st.markdown(f"#### ⏰ {ref_ideal.get('hora', '')} - {ref_ideal.get('nome', '')} ({ref_ideal.get('alvo_macros', '')})")
+                st.markdown(f"**🧩 Montagem:** {ref_ideal.get('estrutura_prato', '')}")
+                st.markdown(f"**💡 Opções:** {ref_ideal.get('sugestoes_flexiveis', '')}")
+                st.info(f"👩‍⚕️ **Clínica:** {ref_ideal.get('instrucao_clinica', '')}")
 
-# --- ABA 5: PAINEL AO VIVO ---
+# --- ABA 5: CHAT COM A NUTRICIONISTA (NOVO) ---
 with tab5:
+    st.markdown("### 💬 Nutri de Bolso 24h")
+    st.write("Tire dúvidas sobre alimentos, peça para substituir uma refeição ou **envie a foto do seu prato** para avaliação de macros e insulina.")
+
+    # Uploader de foto do prato
+    foto_upload = st.file_uploader("📸 Enviar foto do prato ou rótulo", type=["jpg", "jpeg", "png"])
+
+    # Exibe o histórico de conversa na tela
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if "imagem_suporte" in msg and msg["imagem_suporte"] is not None:
+                st.image(msg["imagem_suporte"], width=250)
+
+    # Caixa de texto de envio
+    if prompt_chat = st.chat_input("Ex: Nutri, avalie esse prato que peguei no restaurante..."):
+        if not api_configurada:
+            st.error("Configure sua chave de API nos secrets.")
+        else:
+            # Mostra a mensagem do usuário na hora
+            st.session_state.chat_history.append({"role": "user", "content": prompt_chat, "imagem_suporte": foto_upload})
+            with st.chat_message("user"):
+                st.markdown(prompt_chat)
+                if foto_upload:
+                    st.image(foto_upload, width=250)
+
+            # Prepara a IA e gera a resposta
+            with st.chat_message("assistant"):
+                with st.spinner("A Nutri está digitando..."):
+                    try:
+                        # Contexto mestre para a IA agir como a Nutri do App
+                        conteudo_ia = [
+                            "Você é a NutryAi, uma Nutricionista Clínica empática, direta e especialista em Resistência à Insulina e Dieta Flexível. Seja prestativa, use um tom motivador e direto ao ponto. Se o paciente enviar uma imagem, analise os alimentos visíveis, estime calorias e diga se o prato favorece picos de insulina (orientando correções, como adicionar mais salada).",
+                            prompt_chat
+                        ]
+                        
+                        # Se tiver foto anexada, lê e envia pro cérebro da IA
+                        if foto_upload:
+                            imagem_pil = Image.open(foto_upload)
+                            conteudo_ia.append(imagem_pil)
+
+                        resposta_chat = modelo.generate_content(conteudo_ia)
+                        st.markdown(resposta_chat.text)
+                        
+                        # Salva a resposta da Nutri no histórico
+                        st.session_state.chat_history.append({"role": "assistant", "content": resposta_chat.text})
+                    
+                    except Exception as e:
+                        st.error(f"Erro ao falar com a Nutri: {e}")
+
+# --- ABA 6: PAINEL AO VIVO ---
+with tab6:
     hora_agora = datetime.now(fuso_local).strftime("%H:%M")
-    
     if st.session_state.cardapio_atual is None:
         st.warning("Vá na aba '🧠 Dia a Dia' para gerar seu cardápio com base no que você já tem em casa.")
     else:
         with st.container(border=True):
-            st.markdown(f"### 🎯 Resumo do Dia (Agora: {hora_agora})")
             resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("🔥 Kcal", resumo.get('calorias_totais', '0'))
@@ -302,57 +279,38 @@ with tab5:
             c4.metric("🥑 Gord", resumo.get('gorduras_totais', '0g'))
 
         refeicoes = st.session_state.cardapio_atual.get("refeicoes", [])
-        progresso = len(st.session_state.consumidos)
         total_refeicoes = len(refeicoes)
-        
-        st.progress(progresso / total_refeicoes if total_refeicoes > 0 else 0)
+        st.progress(len(st.session_state.consumidos) / total_refeicoes if total_refeicoes > 0 else 0)
         
         for i, ref in enumerate(refeicoes):
             id_ref = f"ref_{i}"
             ja_consumido = id_ref in st.session_state.consumidos
-            
             with st.container(border=True):
                 col_texto, col_check = st.columns([4, 1], vertical_alignment="center")
-                
                 with col_texto:
-                    cor_status = "✅" if ja_consumido else "🕒"
-                    st.markdown(f"**{cor_status} {ref['hora']} | {ref['nome']}**")
+                    st.markdown(f"**{'✅' if ja_consumido else '🕒'} {ref['hora']} | {ref['nome']}**")
                     st.write(f"🍽️ {ref['ingredientes']}")
-                    
-                    macros = ref.get('macros', {})
-                    st.caption(f"💡 {ref['instrucao_preparo']} | 🔥 {macros.get('calorias', 0)} kcal")
-                
                 with col_check:
                     concluido = st.checkbox("Baixa", key=f"check_{i}", value=ja_consumido, disabled=ja_consumido)
-                    
                     if concluido and not ja_consumido:
                         st.session_state.consumidos.add(id_ref)
-                        for item_usado in ref.get("uso_despensa", []):
-                            nome_exato = item_usado.get("nome_exato")
-                            qtd_descontar = item_usado.get("qtd_descontada", 0)
-                            idx = st.session_state.despensa.index[st.session_state.despensa['Alimento'] == nome_exato].tolist()
-                            if idx:
-                                linha = idx[0]
-                                st.session_state.despensa.at[linha, 'Quantidade'] -= float(qtd_descontar)
+                        for item in ref.get("uso_despensa", []):
+                            idx = st.session_state.despensa.index[st.session_state.despensa['Alimento'] == item.get("nome_exato")].tolist()
+                            if idx: st.session_state.despensa.at[idx[0], 'Quantidade'] -= float(item.get("qtd_descontada", 0))
                         salvar_despensa(st.session_state.despensa)
                         st.rerun()
 
-# --- ABA 6: LISTA DE COMPRAS ---
-with tab6:
+# --- ABA 7: LISTA DE COMPRAS ---
+with tab7:
     with st.container(border=True):
         st.markdown("### 🛒 Inteligência de Reposição")
-        st.write("O NutryAi identificou que os seguintes itens acabaram no seu estoque:")
-        
         estoque_zerado = st.session_state.despensa[st.session_state.despensa["Quantidade"] <= 0]
-        
         if estoque_zerado.empty:
-            st.success("Tudo certo por aqui! Seu estoque está abastecido para os próximos preparos. ✅")
+            st.success("Tudo certo por aqui! Seu estoque está abastecido. ✅")
         else:
             for index, row in estoque_zerado.iterrows():
                 st.error(f"⚠️ **{row['Alimento']}** precisa ser reposto.")
-                
     with st.container(border=True):
-        st.markdown("### 📝 Bloco de Notas do Mercado")
-        anotacoes = st.text_area("O que mais a 'Nutricionista Ideal' sugeriu que você precisa comprar?", height=120, placeholder="Ex: Inhame, semente de abóbora, sardinha, etc...")
-        if st.button("Salvar Anotações Temporárias"):
-            st.toast("Suas anotações ficarão na tela enquanto você estiver com o app aberto!")
+        st.text_area("O que mais a 'Nutricionista Ideal' sugeriu comprar?", height=120)
+        if st.button("Salvar Anotações Temporárias"): st.toast("Anotado!")
+
