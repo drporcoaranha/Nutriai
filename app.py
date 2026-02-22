@@ -26,7 +26,7 @@ else:
     icone_tempo = "🌙"
     msg_contexto = "Quase lá, foco na reta final do seu dia."
 
-# Injetando CSS SUPER CUSTOMIZADO (Estilo Nativo iOS Lapidado)
+# Injetando CSS SEGURO (Sem quebrar as colunas nativas do Streamlit)
 st.markdown(f"""
     <style>
     #MainMenu {{visibility: hidden;}}
@@ -78,59 +78,24 @@ st.markdown(f"""
         padding: 15px !important;
     }}
     
-    div[data-testid="stButton"] button {{
-        border-radius: 14px !important; 
+    /* Botões Gerais Estilo iOS */
+    div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{
+        border-radius: 20px !important; /* Estilo pílula suave */
         height: 50px !important;
         font-weight: 600 !important;
-        font-size: 17px !important;
-        border: none !important;
+        font-size: 16px !important;
+        border: 1px solid #E5E5EA !important;
         transition: all 0.2s ease-in-out !important;
     }}
+    
     div[data-testid="stButton"] button[kind="primary"] {{
         background-color: #007AFF !important; 
         color: white !important;
+        border: none !important;
     }}
     div[data-testid="stButton"] button[kind="primary"]:hover {{
         background-color: #0062CC !important;
         transform: scale(0.98);
-    }}
-
-    @media (max-width: 768px) {{
-        div[data-testid="stHorizontalBlock"] {{
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            justify-content: center !important;
-            gap: 15px !important;
-        }}
-        div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{
-            width: auto !important;
-            min-width: auto !important;
-            flex: 1 1 auto !important;
-        }}
-    }}
-
-    div[data-testid="stPopover"] {{
-        display: flex !important;
-        justify-content: center !important;
-    }}
-    div[data-testid="stPopover"] > button {{
-        width: 60px !important;
-        height: 60px !important;
-        min-width: 60px !important;
-        max-width: 60px !important;
-        min-height: 60px !important;
-        max-height: 60px !important;
-        border-radius: 50% !important;
-        padding: 0 !important;
-        font-size: 24px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        background-color: #FFFFFF !important;
-        color: #000000 !important;
-        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1) !important;
-        border: 1px solid #E5E5EA !important;
     }}
     
     div[data-testid="stChatMessage"] {{
@@ -242,10 +207,11 @@ with tab1:
 # --- ABA 2: ESTOQUE & COMPRAS ---
 with tab2:
     st.markdown("### 🛒 Seu Estoque")
-    c_espaco_esq, col_add, col_rem, c_espaco_dir = st.columns([1, 1, 1, 1])
+    # Voltamos para o grid nativo e seguro do Streamlit
+    col_add, col_rem = st.columns(2)
     with col_add:
-        with st.popover("➕"):
-            st.markdown("#### Novo Alimento")
+        with st.popover("➕ Novo", use_container_width=True):
+            st.markdown("#### Adicionar Alimento")
             novo_nome = st.text_input("Alimento")
             nova_qtd = st.number_input("Qtd", min_value=0.0, step=1.0)
             nova_unidade = st.selectbox("Medida", ["g", "kg", "ml", "L", "un", "dose", "colher"])
@@ -258,7 +224,7 @@ with tab2:
                     st.toast("✅ Item guardado!")
                     st.rerun()
     with col_rem:
-        with st.popover("🗑️"):
+        with st.popover("🗑️ Remover", use_container_width=True):
             st.markdown("#### Excluir Alimento")
             lista_alimentos = st.session_state.despensa["Alimento"].tolist()
             item_remover = st.selectbox("Apagar:", lista_alimentos)
@@ -273,6 +239,7 @@ with tab2:
     df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
     df_visual.set_index("Alimento", inplace=True)
     st.table(df_visual[["Disponível", "Pronto/Rápido"]])
+    
     st.divider()
     st.markdown("### 📝 Lista do Mercado")
     estoque_zerado = st.session_state.despensa[st.session_state.despensa["Quantidade"] <= 0]
@@ -291,8 +258,8 @@ with tab3:
         st.markdown("""
         <div style='text-align: center; padding: 30px 20px; background-color: #FFFFFF; border-radius: 14px; box-shadow: 0px 2px 10px rgba(0,0,0,0.04); margin-bottom: 20px; margin-top: 10px;'>
             <h1 style='font-size: 3.5rem; margin-bottom: 5px;'>🍽️</h1>
-            <h3 style='color: #000000; font-weight: 700; margin-bottom: 5px;'>Seu dia ainda está em branco</h3>
-            <p style='color: #8E8E93; font-size: 0.95rem; margin-bottom: 25px;'>Vamos criar um plano de ataque inteligente usando apenas o que você tem na geladeira agora.</p>
+            <h3 style='color: #000000; font-weight: 700; margin-bottom: 5px;'>Seu dia em branco</h3>
+            <p style='color: #8E8E93; font-size: 0.95rem; margin-bottom: 25px;'>Vamos criar um plano de ataque inteligente usando apenas o que tem na geladeira hoje.</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -323,7 +290,7 @@ with tab3:
     if st.session_state.cardapio_atual is not None:
         hora_agora = datetime.now(fuso_local).strftime("%H:%M")
         
-        # UX FEATURE 1: Cálculos de Gamificação (Macros Consumidos vs Totais)
+        # UX FEATURE 1: Cálculos de Gamificação
         resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
         refeicoes = st.session_state.cardapio_atual.get("refeicoes", [])
         
@@ -377,10 +344,10 @@ with tab3:
                             idx = st.session_state.despensa.index[st.session_state.despensa['Alimento'] == item.get("nome_exato")].tolist()
                             if idx: st.session_state.despensa.at[idx[0], 'Quantidade'] -= float(item.get("qtd_descontada", 0))
                         salvar_despensa(st.session_state.despensa)
-                        st.toast(f"🎉 Rumo à meta! Refeição concluída.")
+                        st.toast(f"🎉 Refeição concluída!")
                         st.rerun()
             
-            # Desenha o fio da Timeline (exceto na última refeição)
+            # Desenha o fio da Timeline
             if i < len(refeicoes) - 1:
                 st.markdown("<div style='width: 3px; height: 25px; background-color: #E5E5EA; margin-left: 30px; margin-top: -15px; margin-bottom: -15px; border-radius: 2px; z-index: 1; position: relative;'></div>", unsafe_allow_html=True)
 
@@ -390,8 +357,8 @@ with tab4:
         st.markdown("""
         <div style='text-align: center; padding: 30px 20px; background-color: #FFFFFF; border-radius: 14px; box-shadow: 0px 2px 10px rgba(0,0,0,0.04); margin-bottom: 20px; margin-top: 10px;'>
             <h1 style='font-size: 3.5rem; margin-bottom: 5px;'>👩‍⚕️</h1>
-            <h3 style='color: #000000; font-weight: 700; margin-bottom: 5px;'>Estrutura Padrão Ouro</h3>
-            <p style='color: #8E8E93; font-size: 0.95rem; margin-bottom: 25px;'>A Nutri vai criar seu plano perfeito, ignorando o estoque, para você usar como guia no mercado.</p>
+            <h3 style='color: #000000; font-weight: 700; margin-bottom: 5px;'>Plano Padrão Ouro</h3>
+            <p style='color: #8E8E93; font-size: 0.95rem; margin-bottom: 25px;'>A Nutri vai criar seu plano perfeito (ignorando o estoque) para você usar no mercado.</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -434,7 +401,7 @@ with tab4:
 # --- ABA 5: CHAT COM A NUTRICIONISTA ---
 with tab5:
     st.markdown("### 💬 Chat com a Nutri")
-    st.write("Dúvidas no mercado? Restaurante a quilo? Mande a foto.")
+    st.write("Dúvidas no restaurante a quilo? Envie a foto!")
     foto_upload = st.file_uploader("📸 Foto do prato ou rótulo", type=["jpg", "jpeg", "png"])
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
@@ -458,4 +425,3 @@ with tab5:
                         st.markdown(resposta_chat.text)
                         st.session_state.chat_history.append({"role": "assistant", "content": resposta_chat.text})
                     except Exception as e: st.error(f"Erro na resposta: {e}")
-
