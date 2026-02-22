@@ -86,11 +86,31 @@ st.markdown("""
         transform: scale(0.98);
     }
 
-    /* 7. Botões Redondos de Ação Perfeitos (Círculos Absolutos e Centralizados) */
+    /* 7. MÁGICA DE LAYOUT: Botões Redondos Perfeitamente Centralizados e Lado a Lado no Mobile */
+    
+    /* Hack para impedir que o Streamlit quebre os botões em duas linhas no celular e force eles pro centro */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) {
+        display: flex !important;
+        flex-direction: row !important; /* Força ficar lado a lado */
+        justify-content: center !important; /* Centraliza a dupla na tela */
+        gap: 25px !important; /* Distância perfeita entre o + e a Lixeira */
+    }
+    
+    /* Faz a coluna abraçar apenas o botão (60px) em vez de esticar a tela toda */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stPopover"]) > div[data-testid="column"] {
+        width: auto !important;
+        flex: 0 0 auto !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+    }
+    
+    /* Fallback caso algum navegador antigo ignore o código acima: centraliza o botão dentro de si mesmo */
     div[data-testid="stPopover"] {
         display: flex !important;
-        justify-content: center !important; 
+        justify-content: center !important;
     }
+
+    /* Desenho do Círculo Perfeito */
     div[data-testid="stPopover"] > button {
         width: 60px !important;
         height: 60px !important;
@@ -126,7 +146,7 @@ st.markdown("""
         color: black !important;
     }
 
-    /* 9. Tabela Fluida Nativa Estilo iOS (Fim do scroll duplo!) */
+    /* 9. Tabela Fluida Nativa Estilo iOS */
     table {
         width: 100%;
         border-collapse: collapse;
@@ -147,7 +167,7 @@ st.markdown("""
         border-right: none !important;
     }
     tr:last-child td {
-        border-bottom: none !important; /* Tira a linha do último item */
+        border-bottom: none !important; 
     }
     tbody tr:hover {
         background-color: rgba(0, 122, 255, 0.05) !important;
@@ -250,8 +270,8 @@ with tab1:
 with tab2:
     st.markdown("### 🛒 Seu Estoque")
     
-    # Paredes laterais grandes e botões espremidos no centro
-    c_espaco_esq, col_add, col_rem, c_espaco_dir = st.columns([1, 0.25, 0.25, 1])
+    # Criamos colunas simples. O CSS injetado lá em cima vai esmagar elas pro centro!
+    col_add, col_rem = st.columns(2)
     
     with col_add:
         with st.popover("➕"):
@@ -279,18 +299,13 @@ with tab2:
                 st.toast("🗑️ Item removido!")
                 st.rerun()
 
-    st.write("") # Espaçamento respirável
+    st.write("") # Espaçamento
     
-    # --- MÁGICA DA TABELA FLUIDA ---
     df_visual = st.session_state.despensa.copy()
     def formatar_estoque(row):
         return "❌ ESGOTADO" if row["Quantidade"] <= 0 else f"{row['Quantidade']} {row['Unidade']}"
     df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
-    
-    # Define "Alimento" como o índice para esconder os números feios (0, 1, 2...)
     df_visual.set_index("Alimento", inplace=True)
-    
-    # Usa st.table no lugar de st.dataframe para rolar junto com a tela inteira!
     st.table(df_visual[["Disponível", "Pronto/Rápido"]])
 
     st.divider()
@@ -457,3 +472,4 @@ with tab5:
                     
                     except Exception as e:
                         st.error(f"Erro na resposta: {e}")
+
