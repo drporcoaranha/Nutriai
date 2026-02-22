@@ -20,7 +20,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🍏 NutryAi")
-st.caption("Seu assistente de nutrição, gestão de tempo e controle glicêmico.")
+st.caption("Seu assistente de nutrição flexível, gestão de tempo e controle glicêmico.")
 
 # --- 2. LÓGICA DE MEMÓRIA E ARQUIVOS ---
 ARQUIVO_DESPENSA = "despensa_inteligente_ri.csv" 
@@ -63,7 +63,7 @@ if 'despensa' not in st.session_state:
     st.session_state.despensa = carregar_despensa()
 if 'cardapio_atual' not in st.session_state:
     st.session_state.cardapio_atual = None
-if 'cardapio_ideal' not in st.session_state: # NOVO: Memória para o cardápio ideal
+if 'cardapio_ideal' not in st.session_state: 
     st.session_state.cardapio_ideal = None
 if 'consumidos' not in st.session_state:
     st.session_state.consumidos = set()
@@ -107,14 +107,14 @@ with tab1:
         
         if st.button("Salvar Agenda", use_container_width=True, type="primary"):
             st.session_state.cardapio_atual = None
-            st.session_state.cardapio_ideal = None # Reseta o ideal também
+            st.session_state.cardapio_ideal = None 
             st.session_state.consumidos = set()
             st.success("Agenda salva! A IA agora conhece seus blocos de tempo.")
 
 # --- ABA 2: ESTOQUE (Despensa) ---
 with tab2:
     with st.container(border=True):
-        st.subheader("Gerenciar Estoque")
+        st.subheader("Gerenciar Estoque / Lista de Compras")
         
         col_add, col_rem = st.columns(2)
         
@@ -154,7 +154,7 @@ with tab2:
 
 # --- ABA 3: MOTOR DA IA (CENÁRIO REAL / DIA A DIA) ---
 with tab3:
-    st.info("A IA vai cruzar seus horários com o que você **TEM HOJE NO ESTOQUE** e montar sua logística completa para dar baixa na aba Ao Vivo.")
+    st.info("A IA vai cruzar seus horários com o que você **TEM HOJE NO ESTOQUE** e montar sua logística para dar baixa.")
     st.write("") 
     
     if st.button("⚡ Gerar Cardápio Baseado no Estoque", use_container_width=True, type="primary"):
@@ -200,33 +200,50 @@ with tab3:
                 except Exception as e:
                     st.error(f"🚨 Erro na IA: {e}")
 
-# --- ABA 4: A NOVA CONSULTA COM A NUTRICIONISTA (CENÁRIO IDEAL) ---
+# --- ABA 4: A NOVA CONSULTA (METAS DE MACROS FLEXÍVEIS) ---
 with tab4:
-    st.info("Aqui a Nutricionista ignora o seu estoque e cria o **Plano Ideal Perfeito** para a sua Resistência à Insulina baseado nos seus horários. Use isso para descobrir novos alimentos e atualizar sua lista de compras!")
+    st.info("A Nutricionista definiu **Metas de Macros** e **Porções Flexíveis** para a sua rotina, para você não ficar preso a um cardápio engessado.")
     
-    if st.button("👩‍⚕️ Consultar Nutricionista (Gerar Plano Ideal)", use_container_width=True):
+    if st.button("👩‍⚕️ Gerar Estratégia Flexível", use_container_width=True):
         if not api_configurada:
             st.error("Configure sua chave de API nos secrets.")
         else:
-            with st.spinner("Desenhando o plano ouro para sua saúde..."):
+            with st.spinner("Calculando distribuição de macros e estratégias de porções..."):
                 prompt_ideal = f"""
-                Você é um Nutricionista Clínico de Alta Performance, especialista em Resistência à Insulina (RI) e Gestão de Tempo.
+                Você é um Nutricionista Clínico de Alta Performance, especialista em Resistência à Insulina (RI), Dieta Flexível e Gestão de Tempo.
                 
                 MISSÃO:
-                Criar um plano alimentar de 24h IDEAL, inteligente e altamente acessível (focado no Guia Alimentar para a População Brasileira de 2021).
-                IGNORAR o estoque do paciente. Sugira as melhores combinações possíveis que ele PODE comprar no supermercado.
+                Não crie um cardápio engessado. Crie um PLANO DE METAS DIÁRIAS (Macros) e um GUIA DE ESTRUTURAÇÃO DE PRATOS por refeição.
+                A ideia é dar liberdade ao paciente para escolher os alimentos, respeitando os macros do horário e o limite de tempo para cozinhar.
                 
-                REGRAS GLICÊMICAS:
-                - Paciente com Resistência à Insulina.
-                - NUNCA sugira carboidratos isolados. Sempre combine com fontes de fibras, proteínas ou gorduras boas para achatar o pico de insulina.
+                DIRETRIZES PARA RESISTÊNCIA À INSULINA:
+                - Foco em fibras altas (mínimo 30g/dia).
+                - Estrutura obrigatória das refeições: Carboidrato Complexo SEMPRE deve estar acompanhado de Proteína Magra ou Gordura Boa.
                 
                 AGENDA:
-                Acorda: {hora_acordar.strftime('%H:%M')} | Dorme: {hora_dormir.strftime('%H:%M')} | Trab: {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Trânsito: {transito_inicio.strftime('%H:%M')} às {transito_fim.strftime('%H:%M')} | Treino: {treino_inicio.strftime('%H:%M')} às {treino_fim.strftime('%H:%M')} | Estudo: {estudo_inicio.strftime('%H:%M')} às {estudo_fim.strftime('%H:%M')} | Prep. Máx: {tempo_preparo} min.
+                Acorda: {hora_acordar.strftime('%H:%M')} | Dorme: {hora_dormir.strftime('%H:%M')} | Trab: {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Trânsito: {transito_inicio.strftime('%H:%M')} às {transito_fim.strftime('%H:%M')} | Treino: {treino_inicio.strftime('%H:%M')} às {treino_fim.strftime('%H:%M')} | Estudo: {estudo_inicio.strftime('%H:%M')} às {estudo_fim.strftime('%H:%M')} | Tempo total para cozinhar: {tempo_preparo} min/dia.
                 
-                Retorne EXCLUSIVAMENTE em formato JSON puro. Estrutura:
+                REGRAS DE LOGÍSTICA:
+                Refeições em blocos de trânsito ou pouco tempo DEVEM ter opções de sugestões que não exigem fogão ou são transportáveis.
+                
+                Retorne EXCLUSIVAMENTE em formato JSON puro. Estrutura EXATA esperada:
                 {{
+                  "metas_diarias": {{
+                    "calorias": "2000 kcal",
+                    "carboidratos": "150g",
+                    "proteinas": "140g",
+                    "gorduras": "60g",
+                    "fibras": "30g"
+                  }},
                   "refeicoes": [
-                    {{ "hora": "HH:MM", "nome": "Nome da Refeição", "ingredientes": "Quais alimentos comprar e misturar", "instrucao_clinica": "Explique o PORQUÊ essa combinação é boa para a Resistência à Insulina e como ela encaixa no horário (ex: trânsito)." }}
+                    {{
+                      "hora": "HH:MM",
+                      "nome": "Nome da Refeição",
+                      "alvo_macros": "Carbos: 30g | Prot: 25g | Gord: 10g",
+                      "estrutura_prato": "A regra de porções (Ex: 1 porção de carbo complexo + 1 a 2 porções de proteína magra + 1 porção de fibras)",
+                      "sugestoes_flexiveis": "Dê 3 opções práticas e deliciosas que batam esses macros e caibam no tempo disponível.",
+                      "instrucao_clinica": "Explique brevemente por que essa proporção neste horário controla a insulina ou ajuda na logística do dia."
+                    }}
                   ]
                 }}
                 """
@@ -240,14 +257,31 @@ with tab4:
                 except Exception as e:
                     st.error(f"🚨 Erro na IA: {e}")
                     
-    # Renderizando o Cardápio Ideal (Apenas leitura/estudo, sem checkboxes)
+    # Renderizando a Estratégia Flexível
     if st.session_state.cardapio_ideal is not None:
-        st.markdown("### ✨ Seu Plano Ideal de Hoje")
+        metas = st.session_state.cardapio_ideal.get("metas_diarias", {})
+        
+        st.markdown("### 🎯 Suas Metas Diárias de Saúde")
+        st.write("Limite de macros para controlar sua curva glicêmica de forma saudável:")
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("🔥 Kcal", metas.get("calorias", "0"))
+        c2.metric("🌾 Carbos", metas.get("carboidratos", "0g"))
+        c3.metric("🥩 Prot", metas.get("proteinas", "0g"))
+        c4.metric("🥑 Gord", metas.get("gorduras", "0g"))
+        c5.metric("🥦 Fibras", metas.get("fibras", "0g"))
+        
+        st.divider()
+        st.markdown("### 🍽️ Estrutura Flexível de Refeições")
+        
         for ref_ideal in st.session_state.cardapio_ideal.get("refeicoes", []):
             with st.container(border=True):
-                st.markdown(f"#### ⏰ {ref_ideal['hora']} - {ref_ideal['nome']}")
-                st.write(f"🛒 **O que comer:** {ref_ideal['ingredientes']}")
-                st.info(f"💡 **Visão da Nutri:** {ref_ideal['instrucao_clinica']}")
+                st.markdown(f"#### ⏰ {ref_ideal.get('hora', '')} - {ref_ideal.get('nome', '')}")
+                st.caption(f"**🎯 Alvo desta refeição:** {ref_ideal.get('alvo_macros', '')}")
+                
+                st.markdown(f"**🧩 Como montar seu prato:** {ref_ideal.get('estrutura_prato', '')}")
+                st.markdown(f"**💡 Opções Práticas (Baseadas no seu tempo):** {ref_ideal.get('sugestoes_flexiveis', '')}")
+                
+                st.info(f"👩‍⚕️ **Visão Clínica:** {ref_ideal.get('instrucao_clinica', '')}")
 
 # --- ABA 5: PAINEL AO VIVO ---
 with tab5:
