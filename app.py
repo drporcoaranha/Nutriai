@@ -46,8 +46,8 @@ api_configurada = False
 if "GEMINI_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        # Definimos o modelo mais rápido e leve aqui, uma única vez
-        modelo = genai.GenerativeModel('gemini-1.5-flash') 
+        # VOLTAMOS PARA A VERSÃO TOP DE LINHA (Como a sua cota é nova, não dará erro 429)
+        modelo = genai.GenerativeModel('gemini-2.5-flash') 
         api_configurada = True
     except Exception as e:
         pass
@@ -136,7 +136,6 @@ with tab3:
         if not api_configurada:
             st.error("Configure sua chave de API nos secrets.")
         else:
-            # Usamos st.spinner no lugar de st.status para ser mais leve na interface
             with st.spinner("Conectando à IA e calculando cardápio..."):
                 despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
                 dados_despensa = despensa_ativa.to_dict(orient="records")
@@ -156,7 +155,6 @@ with tab3:
                 """
                 
                 try:
-                    # Chamada direta e rápida, sem loops
                     resposta = modelo.generate_content(prompt)
                     texto_resposta = resposta.text.strip()
                     
