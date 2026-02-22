@@ -10,7 +10,7 @@ from PIL import Image
 # --- 1. CONFIGURAÇÃO DA PÁGINA (NutryAi) ---
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered") 
 
-# Injetando CSS SUPER CUSTOMIZADO (Estilo Nativo iOS)
+# Injetando CSS SUPER CUSTOMIZADO (Estilo Nativo iOS Lapidado)
 st.markdown("""
     <style>
     /* 1. Esconder menu nativo e ajustar espaçamentos */
@@ -25,9 +25,9 @@ st.markdown("""
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
     }
 
-    /* 3. Título Estilo iOS (Large Title) */
+    /* 3. Título Estilo iOS (Centralizado) */
     .app-header {
-        text-align: left;
+        text-align: center; /* Voltou para o centro */
         padding-bottom: 10px;
         padding-top: 10px;
     }
@@ -51,7 +51,7 @@ st.markdown("""
         position: sticky;
         top: 0px;
         z-index: 999;
-        background-color: rgba(242, 242, 247, 0.9); /* Translucidez estilo iOS */
+        background-color: rgba(242, 242, 247, 0.9);
         backdrop-filter: blur(10px);
         padding-top: 10px;
         padding-bottom: 10px;
@@ -67,7 +67,7 @@ st.markdown("""
         padding: 15px !important;
     }
     
-    /* 6. Botões Estilo Apple (Azul e com bordas 14px) */
+    /* 6. Botões Principais Estilo Apple (Azul e com bordas 14px) */
     div[data-testid="stButton"] button {
         border-radius: 14px !important; 
         height: 50px !important;
@@ -84,21 +84,41 @@ st.markdown("""
     }
     div[data-testid="stButton"] button[kind="primary"]:hover {
         background-color: #0062CC !important;
-        transform: scale(0.98); /* Efeito de apertar ao invés de crescer */
+        transform: scale(0.98);
     }
 
-    /* 7. Balões do Chat Estilo iMessage */
+    /* 7. NOVO: Botões Redondos de Ação (Popovers) */
+    div[data-testid="stPopover"] > button {
+        width: 65px !important;
+        height: 65px !important;
+        border-radius: 50% !important; /* Círculo perfeito */
+        padding: 0 !important;
+        font-size: 26px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin: 0 auto !important; /* Centraliza dentro da coluna */
+        background-color: #FFFFFF !important;
+        color: #000000 !important;
+        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1) !important; /* Sombra flutuante */
+        border: 1px solid #E5E5EA !important;
+        transition: transform 0.1s ease-in-out !important;
+    }
+    div[data-testid="stPopover"] > button:active {
+        transform: scale(0.9) !important; /* Efeito de aperto nativo */
+        background-color: #F2F2F7 !important;
+    }
+
+    /* 8. Balões do Chat Estilo iMessage */
     div[data-testid="stChatMessage"] {
         border-radius: 18px !important;
         padding: 12px 16px !important;
         border: none !important;
     }
-    /* Mensagem do Assistente (Cinza claro do iMessage) */
     div[data-testid="stChatMessage"]:nth-child(even) {
         background-color: #E9E9EB !important; 
         color: black !important;
     }
-    /* Mensagem do Usuário (Azul do iMessage) - O Streamlit não separa bem nativamente, mas aplicamos um fundo neutro geral */
     
     </style>
     
@@ -196,9 +216,14 @@ with tab1:
 # --- ABA 2: ESTOQUE & COMPRAS ---
 with tab2:
     st.markdown("### 🛒 Seu Estoque")
-    col_add, col_rem = st.columns(2)
+    
+    # AQUI ESTÁ A MÁGICA: Colunas proporcionais para centralizar os botões
+    c_espaco_esq, col_add, col_rem, c_espaco_dir = st.columns([1.5, 1, 1, 1.5])
+    
     with col_add:
-        with st.popover("➕ Adicionar", use_container_width=True):
+        # Trocamos o texto por apenas o emoji. O CSS vai deixá-lo redondo!
+        with st.popover("➕", use_container_width=True):
+            st.markdown("#### Novo Alimento")
             novo_nome = st.text_input("Alimento")
             nova_qtd = st.number_input("Qtd", min_value=0.0, step=1.0)
             nova_unidade = st.selectbox("Medida", ["g", "kg", "ml", "L", "un", "dose", "colher"])
@@ -212,7 +237,8 @@ with tab2:
                     st.rerun()
     
     with col_rem:
-        with st.popover("🗑️ Remover", use_container_width=True):
+        with st.popover("🗑️", use_container_width=True):
+            st.markdown("#### Excluir Alimento")
             lista_alimentos = st.session_state.despensa["Alimento"].tolist()
             item_remover = st.selectbox("Apagar:", lista_alimentos)
             if st.button("Excluir", type="primary"):
@@ -221,6 +247,7 @@ with tab2:
                 st.toast("🗑️ Item removido!")
                 st.rerun()
 
+    st.write("") # Espaçamento respirável
     df_visual = st.session_state.despensa.copy()
     def formatar_estoque(row):
         return "❌ ESGOTADO" if row["Quantidade"] <= 0 else f"{row['Quantidade']} {row['Unidade']}"
@@ -391,4 +418,3 @@ with tab5:
                     
                     except Exception as e:
                         st.error(f"Erro na resposta: {e}")
-
