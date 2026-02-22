@@ -14,15 +14,23 @@ from supabase import create_client, Client
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered", initial_sidebar_state="collapsed") 
 fuso_local = timezone(timedelta(hours=-3))
 
-# --- 2. CONEXÃO COM O SUPABASE (BANCO DE DADOS EM NUVEM) ---
-SUPABASE_URL = "https://mdbkvqwhdovwpimjwcpm.supabase.co"
-SUPABASE_KEY = "sb_publishable_3DUsvz12vOTFmtHqxcxWDA_CLawFh5Q"
+# --- 2. CONEXÃO SEGURA COM O SUPABASE (VIA SECRETS) ---
+try:
+    SUPABASE_URL = st.secrets["SUPABASE_URL"]
+    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+except KeyError:
+    st.error("⚠️ Chaves do Supabase não encontradas no st.secrets!")
+    st.stop()
 
 @st.cache_resource
 def init_connection():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-supabase: Client = init_connection()
+try:
+    supabase: Client = init_connection()
+except Exception as e:
+    st.error(f"Erro ao conectar com o Banco de Dados: {e}")
+    st.stop()
 
 # --- 3. CONFIGURAÇÕES DO GOOGLE LOGIN (OAUTH) ---
 GOOGLE_CLIENT_ID = st.secrets.get("GOOGLE_CLIENT_ID", "")
@@ -51,7 +59,7 @@ GOOGLE_SVG = """
 </svg>
 """
 
-# --- 4. FUNÇÕES DE BANCO DE DADOS (AGORA NO SUPABASE) ---
+# --- 4. FUNÇÕES DE BANCO DE DADOS (SUPABASE) ---
 def hash_senha(senha):
     return hashlib.sha256(str.encode(senha)).hexdigest()
 
@@ -65,7 +73,7 @@ def validar_login(username, senha):
 
 def criar_conta(username, nome, senha):
     res = supabase.table('users').select('username').eq('username', username).execute()
-    if len(res.data) > 0: return False # Usuário já existe
+    if len(res.data) > 0: return False 
     
     novo_perfil = {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento Saudável", "atividade": "Moderadamente Ativo", "foto": None, "streak": 1, "last_login": ""}
     supabase.table('users').insert({
@@ -99,7 +107,6 @@ def carregar_despensa(username):
         return df
 
 def salvar_despensa(df, username):
-    # Apaga o estoque antigo e insere o novo atualizado no banco
     supabase.table('despensa').delete().eq('username', username).execute()
     if not df.empty:
         df_db = df.rename(columns={"Alimento": "alimento", "Quantidade": "quantidade", "Unidade": "unidade", "Pronto/Rápido": "pronto_rapido"})
@@ -155,7 +162,6 @@ if not st.session_state.logged_in and "code" in st.query_params:
                 username_google = google_user.get("email") 
                 nome_google = google_user.get("given_name", "Usuário") 
                 
-                # Registra no Supabase se não existir
                 res_db = supabase.table('users').select('*').eq('username', username_google).execute()
                 if len(res_db.data) == 0:
                     criar_conta(username_google, nome_google, "google_sso_senha_dummy")
@@ -432,7 +438,6 @@ else:
                 st.write(f"- {row['Alimento']}")
                 texto_zap += f"• {row['Alimento']}\n"
             
-            # BOTÃO DO WHATSAPP
             texto_zap += "\n_Gerado pelo seu app NutryAi_ 🍏"
             link_whatsapp = f"https://api.whatsapp.com/send?text={urllib.parse.quote(texto_zap)}"
             st.markdown(f'<a href="{link_whatsapp}" class="btn-whatsapp" target="_blank">🟢 Enviar para WhatsApp</a>', unsafe_allow_html=True)
