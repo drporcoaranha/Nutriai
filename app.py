@@ -5,7 +5,7 @@ import google.generativeai as genai
 import json
 import os
 import re
-from PIL import Image # NOVO: Biblioteca para leitura de imagens no Chat
+from PIL import Image
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (NutryAi) ---
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered") 
@@ -68,11 +68,10 @@ if 'cardapio_ideal' not in st.session_state:
     st.session_state.cardapio_ideal = None
 if 'consumidos' not in st.session_state:
     st.session_state.consumidos = set()
-if 'chat_history' not in st.session_state: # NOVO: Memória do Chat
+if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 
 # --- 5. INTERFACE VISUAL (ABAS) ---
-# Adicionado a aba de Chat no meio para ficar mais acessível
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["🕒 Agenda", "📦 Estoque", "🧠 Dia a Dia", "👩‍⚕️ Plano", "💬 Chat", "🔴 Ao Vivo", "🛒 Compras"])
 
 # --- ABA 1: ROTINA EM BLOCOS DE TEMPO ---
@@ -213,7 +212,7 @@ with tab4:
                 st.markdown(f"**💡 Opções:** {ref_ideal.get('sugestoes_flexiveis', '')}")
                 st.info(f"👩‍⚕️ **Clínica:** {ref_ideal.get('instrucao_clinica', '')}")
 
-# --- ABA 5: CHAT COM A NUTRICIONISTA (NOVO) ---
+# --- ABA 5: CHAT COM A NUTRICIONISTA ---
 with tab5:
     st.markdown("### 💬 Nutri de Bolso 24h")
     st.write("Tire dúvidas sobre alimentos, peça para substituir uma refeição ou **envie a foto do seu prato** para avaliação de macros e insulina.")
@@ -221,24 +220,25 @@ with tab5:
     # Uploader de foto do prato
     foto_upload = st.file_uploader("📸 Enviar foto do prato ou rótulo", type=["jpg", "jpeg", "png"])
 
-    # Exibe o histórico de conversa na tela
+    # Exibe o histórico de conversa na tela (apenas textos para otimizar memória)
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-            if "imagem_suporte" in msg and msg["imagem_suporte"] is not None:
-                st.image(msg["imagem_suporte"], width=250)
 
-    # Caixa de texto de envio
-    if prompt_chat = st.chat_input("Ex: Nutri, avalie esse prato que peguei no restaurante..."):
+    # Caixa de texto de envio (CORRIGIDO: O Python exige que a atribuição e o "if" sejam separados)
+    prompt_chat = st.chat_input("Ex: Nutri, avalie esse prato que peguei no restaurante...")
+    
+    if prompt_chat:
         if not api_configurada:
             st.error("Configure sua chave de API nos secrets.")
         else:
-            # Mostra a mensagem do usuário na hora
-            st.session_state.chat_history.append({"role": "user", "content": prompt_chat, "imagem_suporte": foto_upload})
+            # Mostra a mensagem do usuário na hora e salva no histórico
+            st.session_state.chat_history.append({"role": "user", "content": prompt_chat})
             with st.chat_message("user"):
                 st.markdown(prompt_chat)
                 if foto_upload:
                     st.image(foto_upload, width=250)
+                    st.caption("Imagem enviada para análise.")
 
             # Prepara a IA e gera a resposta
             with st.chat_message("assistant"):
@@ -246,11 +246,11 @@ with tab5:
                     try:
                         # Contexto mestre para a IA agir como a Nutri do App
                         conteudo_ia = [
-                            "Você é a NutryAi, uma Nutricionista Clínica empática, direta e especialista em Resistência à Insulina e Dieta Flexível. Seja prestativa, use um tom motivador e direto ao ponto. Se o paciente enviar uma imagem, analise os alimentos visíveis, estime calorias e diga se o prato favorece picos de insulina (orientando correções, como adicionar mais salada).",
+                            "Você é a NutryAi, uma Nutricionista Clínica empática, direta e especialista em Resistência à Insulina e Dieta Flexível. Seja prestativa, use um tom motivador e direto ao ponto. Se o paciente enviar uma imagem, analise os alimentos visíveis, estime calorias, liste os macros por cima e diga se o prato favorece picos de insulina (orientando correções rápidas, como adicionar mais salada ou azeite).",
                             prompt_chat
                         ]
                         
-                        # Se tiver foto anexada, lê e envia pro cérebro da IA
+                        # Se tiver foto anexada, processa com o Pillow e manda pra IA
                         if foto_upload:
                             imagem_pil = Image.open(foto_upload)
                             conteudo_ia.append(imagem_pil)
