@@ -64,27 +64,36 @@ if 'consumidos' not in st.session_state:
 # --- 5. INTERFACE VISUAL (ABAS) ---
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🕒 Agenda", "📦 Estoque", "🧠 Gerador", "🔴 Ao Vivo", "📝 Compras"])
 
-# --- ABA 1: ROTINA EM BLOCOS DE TEMPO (NOVA) ---
+# --- ABA 1: ROTINA EM BLOCOS DE TEMPO (REORGANIZADA PARA UX MOBILE) ---
 with tab1:
     with st.container(border=True):
         st.subheader("Blocos de Tempo Ocupado")
-        st.write("Defina seus horários compromissados. A IA usará os **buracos** da sua agenda para encaixar as refeições.")
+        st.write("Defina seus horários. A IA usará os **buracos** da sua agenda para encaixar as refeições.")
         
-        # Agrupamento para facilitar o preenchimento no celular
-        col1, col2 = st.columns(2)
-        with col1:
-            hora_acordar = st.time_input("☀️ Acordar", time(6, 30))
-            trab_inicio = st.time_input("💼 Início Trabalho", time(8, 0))
-            transito_inicio = st.time_input("🚗 Início Trânsito", time(17, 30))
-            treino_inicio = st.time_input("💪 Início Treino", time(19, 0))
-            estudo_inicio = st.time_input("📚 Início Estudo", time(20, 30))
-            
-        with col2:
-            hora_dormir = st.time_input("🌙 Dormir", time(23, 0))
-            trab_fim = st.time_input("🏠 Fim Trabalho", time(17, 30))
-            transito_fim = st.time_input("🏁 Fim Trânsito", time(18, 30))
-            treino_fim = st.time_input("🚿 Fim Treino", time(20, 0))
-            estudo_fim = st.time_input("📝 Fim Estudo", time(22, 0))
+        st.markdown("#### ☀️ Descanso")
+        c1, c2 = st.columns(2)
+        hora_acordar = c1.time_input("Acordar", time(6, 30))
+        hora_dormir = c2.time_input("Dormir", time(23, 0))
+        
+        st.markdown("#### 💼 Trabalho")
+        c3, c4 = st.columns(2)
+        trab_inicio = c3.time_input("Início", time(8, 0), key="t_i")
+        trab_fim = c4.time_input("Fim", time(17, 30), key="t_f")
+        
+        st.markdown("#### 🚗 Trânsito / Deslocamento")
+        c5, c6 = st.columns(2)
+        transito_inicio = c5.time_input("Início", time(17, 30), key="tr_i")
+        transito_fim = c6.time_input("Fim", time(18, 30), key="tr_f")
+        
+        st.markdown("#### 💪 Treino")
+        c7, c8 = st.columns(2)
+        treino_inicio = c7.time_input("Início", time(19, 0), key="tre_i")
+        treino_fim = c8.time_input("Fim", time(20, 0), key="tre_f")
+        
+        st.markdown("#### 📚 Estudo")
+        c9, c10 = st.columns(2)
+        estudo_inicio = c9.time_input("Início", time(20, 30), key="est_i")
+        estudo_fim = c10.time_input("Fim", time(22, 0), key="est_f")
         
         st.divider()
         tempo_preparo = st.slider("⏱️ Tempo livre diário para cozinhar (minutos)", 0, 120, 30)
