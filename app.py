@@ -10,22 +10,22 @@ from PIL import Image
 # --- 1. CONFIGURAÇÃO DA PÁGINA (NutryAi) ---
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered") 
 
-# Injetando CSS SUPER CUSTOMIZADO (Estilo Nativo iOS Lapidado)
+# Injetando CSS SEGURO (Estilo iOS sem quebrar o layout da Agenda)
 st.markdown("""
     <style>
-    /* 1. Esconder menu nativo e ajustar espaçamentos */
+    /* Esconder menu nativo e ajustar espaçamentos */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .block-container {padding-top: 2rem; padding-bottom: 5rem; max-width: 600px;}
     
-    /* 2. Fundo Cinza Claro do iOS e Fonte SF Pro */
+    /* Fundo Cinza Claro do iOS e Fonte SF Pro */
     .stApp {
         background-color: #F2F2F7 !important;
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
     }
 
-    /* 3. Título Estilo iOS (Centralizado) */
+    /* Título Centralizado */
     .app-header {
         text-align: center;
         padding-bottom: 10px;
@@ -45,7 +45,7 @@ st.markdown("""
         font-weight: 500;
     }
 
-    /* 4. Abas Fixas Estilo Segmented Control Apple */
+    /* Abas Fixas Estilo Apple */
     div[data-testid="stTabs"] > div:first-child {
         position: -webkit-sticky;
         position: sticky;
@@ -58,7 +58,7 @@ st.markdown("""
         border-bottom: 1px solid rgba(60, 60, 67, 0.1);
     }
     
-    /* 5. Cartões Brancos Flutuantes (Cards do iOS) */
+    /* Cartões Brancos Flutuantes */
     div[data-testid="stVerticalBlockBorderWrapper"] > div {
         background-color: #FFFFFF !important;
         border-radius: 14px !important;
@@ -67,7 +67,7 @@ st.markdown("""
         padding: 15px !important;
     }
     
-    /* 6. Botões Principais Estilo Apple */
+    /* Botões Principais Estilo Apple */
     div[data-testid="stButton"] button {
         border-radius: 14px !important; 
         height: 50px !important;
@@ -81,33 +81,12 @@ st.markdown("""
         background-color: #007AFF !important; 
         color: white !important;
     }
-    div[data-testid="stButton"] button[kind="primary"]:hover {
-        background-color: #0062CC !important;
-        transform: scale(0.98);
-    }
 
-    /* 7. MÁGICA DE LAYOUT: Domando as Colunas no Celular (Fim da quebra de linha esquerda) */
-    @media (max-width: 768px) {
-        /* Impede o Streamlit de empilhar as colunas e as mantém na mesma linha */
-        div[data-testid="stHorizontalBlock"] {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            justify-content: center !important;
-            gap: 15px !important;
-        }
-        /* Desativa o esticamento de 100% que joga os itens pro canto esquerdo */
-        div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-            width: auto !important;
-            min-width: auto !important;
-            flex: 1 1 auto !important;
-        }
-    }
-
-    /* 8. Desenho do Botão Círculo Perfeito */
+    /* Botões Redondos de Ação (Adicionar/Remover) Centralizados com Segurança */
     div[data-testid="stPopover"] {
         display: flex !important;
-        justify-content: center !important;
+        justify-content: center !important; 
+        width: 100% !important;
     }
     div[data-testid="stPopover"] > button {
         width: 60px !important;
@@ -116,7 +95,7 @@ st.markdown("""
         max-width: 60px !important;
         min-height: 60px !important;
         max-height: 60px !important;
-        border-radius: 50% !important; /* Círculo perfeito */
+        border-radius: 50% !important; 
         padding: 0 !important;
         font-size: 24px !important;
         display: flex !important;
@@ -126,14 +105,9 @@ st.markdown("""
         color: #000000 !important;
         box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1) !important;
         border: 1px solid #E5E5EA !important;
-        transition: transform 0.1s ease-in-out !important;
-    }
-    div[data-testid="stPopover"] > button:active {
-        transform: scale(0.9) !important;
-        background-color: #F2F2F7 !important;
     }
 
-    /* 9. Balões do Chat Estilo iMessage */
+    /* Balões do Chat */
     div[data-testid="stChatMessage"] {
         border-radius: 18px !important;
         padding: 12px 16px !important;
@@ -144,7 +118,7 @@ st.markdown("""
         color: black !important;
     }
 
-    /* 10. Tabela Fluida Nativa Estilo iOS */
+    /* Tabela Fluida Nativa */
     table {
         width: 100%;
         border-collapse: collapse;
@@ -170,7 +144,6 @@ st.markdown("""
     tbody tr:hover {
         background-color: rgba(0, 122, 255, 0.05) !important;
     }
-    
     </style>
     
     <div class="app-header">
@@ -268,8 +241,8 @@ with tab1:
 with tab2:
     st.markdown("### 🛒 Seu Estoque")
     
-    # Criamos 4 colunas: as das pontas (vazias) se esmagam, empurrando os botões pro centro!
-    c_espaco_esq, col_add, col_rem, c_espaco_dir = st.columns([1, 1, 1, 1])
+    # Voltamos para as colunas simples para não quebrar a responsividade do app
+    col_add, col_rem = st.columns(2)
     
     with col_add:
         with st.popover("➕"):
@@ -297,9 +270,8 @@ with tab2:
                 st.toast("🗑️ Item removido!")
                 st.rerun()
 
-    st.write("") # Espaçamento respirável
+    st.write("") 
     
-    # --- TABELA FLUIDA NATIVA ---
     df_visual = st.session_state.despensa.copy()
     def formatar_estoque(row):
         return "❌ ESGOTADO" if row["Quantidade"] <= 0 else f"{row['Quantidade']} {row['Unidade']}"
