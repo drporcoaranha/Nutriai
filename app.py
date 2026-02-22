@@ -20,20 +20,27 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🍏 NutryAi")
-st.caption("Seu assistente de nutrição e gestão de tempo em blocos.")
+st.caption("Seu assistente de nutrição, gestão de tempo e controle glicêmico.")
 
 # --- 2. LÓGICA DE MEMÓRIA E ARQUIVOS ---
-ARQUIVO_DESPENSA = "despensa.csv"
+# Nome novo para forçar o recarregamento da nova despensa baseada no Guia Alimentar
+ARQUIVO_DESPENSA = "despensa_ri.csv" 
 
 def carregar_despensa():
     if os.path.exists(ARQUIVO_DESPENSA):
         return pd.read_csv(ARQUIVO_DESPENSA)
     else:
+        # Estoque focado no Guia Alimentar BR (2021) e Resistência à Insulina
         df = pd.DataFrame({
-            "Alimento": ["Peito de Frango", "Arroz Branco", "Ovo", "Whey Protein", "Banana", "Barra de Cereal"],
-            "Quantidade": [500.0, 1000.0, 12.0, 900.0, 6.0, 5.0],
-            "Unidade": ["g", "g", "un", "g", "un", "un"],
-            "Pronto/Rápido": ["Não", "Não", "Sim", "Sim", "Sim", "Sim"]
+            "Alimento": [
+                "Ovo", "Peito de Frango", "Patinho Moído", 
+                "Iogurte Natural (Só leite e fermento)", "Aveia em Flocos", 
+                "Semente de Chia", "Arroz Integral", "Feijão Carioca", 
+                "Batata Doce", "Maçã", "Castanha do Pará", "Azeite de Oliva Extravirgem"
+            ],
+            "Quantidade": [24.0, 1000.0, 500.0, 500.0, 400.0, 200.0, 1000.0, 1000.0, 1000.0, 10.0, 150.0, 1.0],
+            "Unidade": ["un", "g", "g", "g", "g", "g", "g", "g", "g", "un", "g", "vidro"],
+            "Pronto/Rápido": ["Sim", "Não", "Não", "Sim", "Sim", "Sim", "Não", "Não", "Não", "Sim", "Sim", "Sim"]
         })
         df.to_csv(ARQUIVO_DESPENSA, index=False)
         return df
@@ -64,7 +71,7 @@ if 'consumidos' not in st.session_state:
 # --- 5. INTERFACE VISUAL (ABAS) ---
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🕒 Agenda", "📦 Estoque", "🧠 Gerador", "🔴 Ao Vivo", "📝 Compras"])
 
-# --- ABA 1: ROTINA EM BLOCOS DE TEMPO (REORGANIZADA PARA UX MOBILE) ---
+# --- ABA 1: ROTINA EM BLOCOS DE TEMPO ---
 with tab1:
     with st.container(border=True):
         st.subheader("Blocos de Tempo Ocupado")
@@ -114,7 +121,7 @@ with tab2:
             with st.popover("➕ Novo Alimento", use_container_width=True):
                 novo_nome = st.text_input("Nome")
                 nova_qtd = st.number_input("Qtd", min_value=0.0, step=1.0)
-                nova_unidade = st.selectbox("Medida", ["g", "kg", "ml", "L", "un", "dose"])
+                nova_unidade = st.selectbox("Medida", ["g", "kg", "ml", "L", "un", "dose", "colher"])
                 novo_pronto = st.radio("Preparo Rápido/Consumo no Carro?", ["Não", "Sim"], horizontal=True)
                 
                 if st.button("Adicionar"):
@@ -144,43 +151,47 @@ with tab2:
     df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
     st.dataframe(df_visual[["Alimento", "Disponível", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
 
-# --- ABA 3: MOTOR DA IA (COM REGRAS DE TIME BLOCKING) ---
+# --- ABA 3: MOTOR DA IA (PERFIL CLÍNICO: RESISTÊNCIA À INSULINA) ---
 with tab3:
-    st.info("A IA mapeará seus blocos ocupados e encaixará refeições nos espaços livres ou no trânsito.")
+    st.info("A IA mapeará seus blocos ocupados e criará refeições de baixo índice glicêmico com o que tem em casa.")
     st.write("") 
     
     if st.button("⚡ Gerar Cardápio Inteligente", use_container_width=True, type="primary"):
         if not api_configurada:
             st.error("Configure sua chave de API nos secrets.")
         else:
-            with st.spinner("Mapeando blocos de tempo e calculando cardápio..."):
+            with st.spinner("Analisando estoque e calculando impacto glicêmico..."):
                 despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
                 dados_despensa = despensa_ativa.to_dict(orient="records")
                 
                 prompt = f"""
-                Você é um Nutricionista de Alta Performance especialista em 'Time Blocking' (Gestão de Tempo).
-                Sua missão é criar um plano alimentar de 24h que se adapte CIRURGICAMENTE à agenda restrita do paciente.
+                Você é um Nutricionista Clínico de Alta Performance, especialista em Gestão de Tempo e tratamento de Resistência à Insulina.
+                
+                PERFIL DO PACIENTE E DIRETRIZES:
+                - Condição Clínica: Resistência à Insulina.
+                - Diretriz Base: Guia Alimentar para a População Brasileira de 2021 (foco em alimentos in natura e minimamente processados).
+                - Regra Glicêmica ABSOLUTA: O paciente NUNCA deve consumir carboidratos isolados. Sempre combine fontes de carboidrato com fibras (ex: aveia, chia), gorduras boas (ex: castanhas, azeite) ou proteínas (ex: ovo, iogurte, frango) para achatar a curva de insulina.
                 
                 AGENDA DE BLOCOS OCUPADOS DO PACIENTE:
                 - ☀️ Acorda às: {hora_acordar.strftime('%H:%M')} | 🌙 Dorme às: {hora_dormir.strftime('%H:%M')}
-                - 💼 Bloco de Trabalho: {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')}
-                - 🚗 Bloco de Trânsito: {transito_inicio.strftime('%H:%M')} às {transito_fim.strftime('%H:%M')}
-                - 💪 Bloco de Treino: {treino_inicio.strftime('%H:%M')} às {treino_fim.strftime('%H:%M')}
-                - 📚 Bloco de Estudo: {estudo_inicio.strftime('%H:%M')} às {estudo_fim.strftime('%H:%M')}
-                - ⏱️ Tempo limite para cozinhar no dia inteiro: {tempo_preparo} min.
+                - 💼 Trabalho: {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')}
+                - 🚗 Trânsito: {transito_inicio.strftime('%H:%M')} às {transito_fim.strftime('%H:%M')}
+                - 💪 Treino: {treino_inicio.strftime('%H:%M')} às {treino_fim.strftime('%H:%M')}
+                - 📚 Estudo: {estudo_inicio.strftime('%H:%M')} às {estudo_fim.strftime('%H:%M')}
+                - ⏱️ Tempo limite para cozinhar hoje: {tempo_preparo} min.
                 
-                REGRAS DE OURO DA LOGÍSTICA:
-                1. Você NÃO PODE agendar preparos complexos durante os blocos de Trânsito, Treino ou Estudo.
-                2. Use o Bloco de Trânsito ou pré-Treino APENAS para alimentos sinalizados como "Pronto/Rápido: Sim" no estoque (ex: Whey, Frutas, Barras). Especifique na instrução: "Consuma no carro/trânsito".
-                3. Refeições que exigem fogão ou mastigação longa (almoço/jantar) devem estar no tempo LIVRE (antes de sair, pausa do trabalho, ou depois de chegar em casa).
+                REGRAS DE LOGÍSTICA:
+                1. NÃO agende preparos complexos durante os blocos de Trânsito, Treino ou Estudo.
+                2. Use o Bloco de Trânsito apenas para alimentos sinalizados como "Pronto/Rápido: Sim" (ex: "Coma a maçã com castanhas no carro").
+                3. Refeições que exigem fogão (almoço/jantar com arroz, feijão, carnes) devem estar no tempo LIVRE.
                 
-                DESPENSA DISPONÍVEL (Estrito a isso): {dados_despensa}
+                DESPENSA DISPONÍVEL (Estrito a estes ingredientes): {dados_despensa}
                 
                 Retorne EXCLUSIVAMENTE em formato JSON puro. Estrutura:
                 {{
                   "resumo_diario": {{ "calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g" }},
                   "refeicoes": [
-                    {{ "hora": "HH:MM", "nome": "Nome do Prato", "ingredientes": "Qtd e Ingrediente", "instrucao_preparo": "Instrução de preparo E de logística (ex: 'Bata o whey antes de sair e tome durante o engarrafamento')", "macros": {{ "calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g" }}, "uso_despensa": [ {{ "nome_exato": "NOME EXATO", "qtd_descontada": 150 }} ] }}
+                    {{ "hora": "HH:MM", "nome": "Nome do Prato", "ingredientes": "Qtd e Ingrediente", "instrucao_preparo": "Instrução de preparo e de logística de tempo", "macros": {{ "calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g" }}, "uso_despensa": [ {{ "nome_exato": "NOME EXATO DO ALIMENTO NA DESPENSA", "qtd_descontada": 150 }} ] }}
                   ]
                 }}
                 """
