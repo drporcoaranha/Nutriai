@@ -2,21 +2,29 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, time, timezone, timedelta
 import google.generativeai as genai
-import json
-import os
-import re
-import hashlib
 import urllib.parse
 import requests
 import base64
+import hashlib
 from io import BytesIO
 from PIL import Image
+from supabase import create_client, Client
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (NutryAi) ---
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered", initial_sidebar_state="collapsed") 
 fuso_local = timezone(timedelta(hours=-3))
 
-# --- 2. CONFIGURAÇÕES DO GOOGLE LOGIN (OAUTH) ---
+# --- 2. CONEXÃO COM O SUPABASE (BANCO DE DADOS EM NUVEM) ---
+SUPABASE_URL = "https://mdbkvqwhdovwpimjwcpm.supabase.co"
+SUPABASE_KEY = "sb_publishable_3DUsvz12vOTFmtHqxcxWDA_CLawFh5Q"
+
+@st.cache_resource
+def init_connection():
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+supabase: Client = init_connection()
+
+# --- 3. CONFIGURAÇÕES DO GOOGLE LOGIN (OAUTH) ---
 GOOGLE_CLIENT_ID = st.secrets.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = st.secrets.get("GOOGLE_CLIENT_SECRET", "")
 REDIRECT_URI = st.secrets.get("REDIRECT_URI", "http://localhost:8501") 
@@ -43,46 +51,43 @@ GOOGLE_SVG = """
 </svg>
 """
 
-# --- 3. SISTEMA DE BANCO DE DADOS (USUÁRIOS E PERFIL) ---
-ARQUIVO_USUARIOS = "usuarios_db.json"
-
+# --- 4. FUNÇÕES DE BANCO DE DADOS (AGORA NO SUPABASE) ---
 def hash_senha(senha):
     return hashlib.sha256(str.encode(senha)).hexdigest()
 
-def carregar_usuarios():
-    if os.path.exists(ARQUIVO_USUARIOS):
-        with open(ARQUIVO_USUARIOS, "r") as f:
-            return json.load(f)
-    return {}
-
-def criar_conta(username, nome, senha):
-    usuarios = carregar_usuarios()
-    if username in usuarios: return False
-    # UX 4.0: Adicionado controle de Streaks (Ofensiva)
-    usuarios[username] = {
-        "nome": nome, 
-        "senha": hash_senha(senha),
-        "perfil": {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento Saudável", "atividade": "Moderadamente Ativo", "foto": None, "streak": 1, "last_login": ""}
-    }
-    with open(ARQUIVO_USUARIOS, "w") as f: json.dump(usuarios, f)
-    return True
-
 def validar_login(username, senha):
-    usuarios = carregar_usuarios()
-    if username in usuarios and usuarios[username]["senha"] == hash_senha(senha):
-        return usuarios[username] 
+    res = supabase.table('users').select('*').eq('username', username).execute()
+    if len(res.data) > 0:
+        user = res.data[0]
+        if user['senha'] == hash_senha(senha) or user['senha'] == "google_sso_senha_dummy":
+            return user
     return None
 
+def criar_conta(username, nome, senha):
+    res = supabase.table('users').select('username').eq('username', username).execute()
+    if len(res.data) > 0: return False # Usuário já existe
+    
+    novo_perfil = {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento Saudável", "atividade": "Moderadamente Ativo", "foto": None, "streak": 1, "last_login": ""}
+    supabase.table('users').insert({
+        "username": username,
+        "nome": nome,
+        "senha": hash_senha(senha),
+        "perfil": novo_perfil
+    }).execute()
+    return True
+
 def salvar_perfil(username, nome_atualizado, perfil_data):
-    usuarios = carregar_usuarios()
-    if username in usuarios:
-        usuarios[username]["nome"] = nome_atualizado
-        usuarios[username]["perfil"] = perfil_data
-        with open(ARQUIVO_USUARIOS, "w") as f: json.dump(usuarios, f)
+    supabase.table('users').update({
+        "nome": nome_atualizado,
+        "perfil": perfil_data
+    }).eq('username', username).execute()
 
 def carregar_despensa(username):
-    arquivo = f"despensa_{username}.csv"
-    if os.path.exists(arquivo): return pd.read_csv(arquivo)
+    res = supabase.table('despensa').select('*').eq('username', username).execute()
+    if len(res.data) > 0:
+        df = pd.DataFrame(res.data)
+        df = df.rename(columns={"alimento": "Alimento", "quantidade": "Quantidade", "unidade": "Unidade", "pronto_rapido": "Pronto/Rápido"})
+        return df[['Alimento', 'Quantidade', 'Unidade', 'Pronto/Rápido']]
     else:
         df = pd.DataFrame({
             "Alimento": ["Ovos", "Goma de Tapioca", "Pão (Francês ou Integral)", "Patinho Moído", "Cenoura", "Peito de Frango", "Aveia em Flocos", "Semente de Chia", "Iogurte Natural", "Maçã"],
@@ -90,18 +95,23 @@ def carregar_despensa(username):
             "Unidade": ["un", "g", "un", "g", "un", "g", "g", "g", "g", "un"],
             "Pronto/Rápido": ["Sim", "Sim", "Sim", "Não", "Sim", "Não", "Sim", "Sim", "Sim", "Sim"]
         })
-        df.to_csv(arquivo, index=False)
+        salvar_despensa(df, username)
         return df
 
 def salvar_despensa(df, username):
-    arquivo = f"despensa_{username}.csv"
-    df.to_csv(arquivo, index=False)
+    # Apaga o estoque antigo e insere o novo atualizado no banco
+    supabase.table('despensa').delete().eq('username', username).execute()
+    if not df.empty:
+        df_db = df.rename(columns={"Alimento": "alimento", "Quantidade": "quantidade", "Unidade": "unidade", "Pronto/Rápido": "pronto_rapido"})
+        df_db['username'] = username
+        records = df_db.to_dict(orient='records')
+        supabase.table('despensa').insert(records).execute()
 
 def extrair_numero(texto):
     numeros = re.findall(r'\d+', str(texto))
     return int(numeros[0]) if numeros else 0
 
-# --- 4. VERIFICAÇÃO DE API GEMINI ---
+# --- 5. VERIFICAÇÃO DE API GEMINI ---
 api_configurada = False
 if "GEMINI_API_KEY" in st.secrets:
     try:
@@ -110,7 +120,7 @@ if "GEMINI_API_KEY" in st.secrets:
         api_configurada = True
     except Exception as e: pass
 
-# --- 5. INICIALIZAÇÃO DE SESSÃO ---
+# --- 6. INICIALIZAÇÃO DE SESSÃO ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'username' not in st.session_state: st.session_state.username = None
 if 'nome_usuario' not in st.session_state: st.session_state.nome_usuario = None
@@ -142,26 +152,31 @@ if not st.session_state.logged_in and "code" in st.query_params:
             user_res = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
             if user_res.status_code == 200:
                 google_user = user_res.json()
+                username_google = google_user.get("email") 
+                nome_google = google_user.get("given_name", "Usuário") 
+                
+                # Registra no Supabase se não existir
+                res_db = supabase.table('users').select('*').eq('username', username_google).execute()
+                if len(res_db.data) == 0:
+                    criar_conta(username_google, nome_google, "google_sso_senha_dummy")
+                    res_db = supabase.table('users').select('*').eq('username', username_google).execute()
+                
+                user_db = res_db.data[0]
+                
                 st.session_state.logged_in = True
-                st.session_state.username = google_user.get("email") 
-                st.session_state.nome_usuario = google_user.get("given_name", "Usuário") 
-                
-                usuarios = carregar_usuarios()
-                if st.session_state.username not in usuarios:
-                    criar_conta(st.session_state.username, st.session_state.nome_usuario, "google_sso_senha_dummy")
-                    usuarios = carregar_usuarios()
-                
-                st.session_state.perfil = usuarios[st.session_state.username].get("perfil", {})
-                st.session_state.despensa = carregar_despensa(st.session_state.username)
+                st.session_state.username = username_google
+                st.session_state.nome_usuario = user_db['nome']
+                st.session_state.perfil = user_db.get("perfil", {})
+                st.session_state.despensa = carregar_despensa(username_google)
                 st.query_params.clear()
                 st.rerun()
         else:
-            st.error(f"Falha na autenticação.")
+            st.error("Falha na autenticação.")
             st.query_params.clear()
     except Exception as e:
         pass
 
-# --- 6. CSS GLOBAL UX 4.0 ---
+# --- 7. CSS GLOBAL UX 4.0 ---
 st.markdown(f"""
     <style>
     [data-testid="stSidebar"] {{ display: none !important; }}
@@ -188,7 +203,6 @@ st.markdown(f"""
     }}
     .btn-google-nativo:hover {{ background-color: #F8F8F8; transform: scale(0.98); }}
 
-    /* Botão WhatsApp Nativo */
     .btn-whatsapp {{
         display: flex; align-items: center; justify-content: center; background-color: #25D366; color: #FFFFFF !important; border-radius: 20px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease-in-out; margin-top: 15px; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.2);
     }}
@@ -251,13 +265,13 @@ if not st.session_state.logged_in:
         if st.button("Criar Minha Conta", use_container_width=True):
             if cad_nome and cad_user and cad_senha:
                 if criar_conta(cad_user, cad_nome, cad_senha): st.success("Conta criada! Pode fazer o login acima.")
-                else: st.error("Esse usuário já existe. Tente outro nome.")
+                else: st.error("Esse usuário já existe.")
 
 # ==========================================
 # MÓDULO 2: O APLICATIVO (LOGADO)
 # ==========================================
 else:
-    # LÓGICA DE GAMIFICAÇÃO (STREAKS) 
+    # LÓGICA DE GAMIFICAÇÃO (STREAKS)
     hoje = datetime.now(fuso_local).date()
     hoje_str = hoje.strftime("%Y-%m-%d")
     ontem = hoje - timedelta(days=1)
@@ -268,11 +282,10 @@ else:
     if last_login_str:
         last_login_date = datetime.strptime(last_login_str, "%Y-%m-%d").date()
         if last_login_date == ontem:
-            streak_atual += 1  # Mantém a ofensiva
+            streak_atual += 1  
         elif last_login_date < ontem:
-            streak_atual = 1   # Perdeu a ofensiva, zera
+            streak_atual = 1   
     
-    # Atualiza se for um novo dia
     if last_login_str != hoje_str:
         st.session_state.perfil["last_login"] = hoje_str
         st.session_state.perfil["streak"] = streak_atual
@@ -332,7 +345,6 @@ else:
                     img.convert('RGB').save(buffered, format="JPEG")
                     foto_salva = base64.b64encode(buffered.getvalue()).decode("utf-8")
                 
-                # Preserva os streaks ao salvar o perfil
                 st.session_state.perfil.update({"idade": nova_idade, "peso": novo_peso, "altura": nova_altura, "objetivo": novo_obj, "atividade": nova_atv, "foto": foto_salva})
                 st.session_state.nome_usuario = novo_nome
                 salvar_perfil(st.session_state.username, novo_nome, st.session_state.perfil)
@@ -420,7 +432,7 @@ else:
                 st.write(f"- {row['Alimento']}")
                 texto_zap += f"• {row['Alimento']}\n"
             
-            # UX 4.0: BOTÃO DO WHATSAPP
+            # BOTÃO DO WHATSAPP
             texto_zap += "\n_Gerado pelo seu app NutryAi_ 🍏"
             link_whatsapp = f"https://api.whatsapp.com/send?text={urllib.parse.quote(texto_zap)}"
             st.markdown(f'<a href="{link_whatsapp}" class="btn-whatsapp" target="_blank">🟢 Enviar para WhatsApp</a>', unsafe_allow_html=True)
