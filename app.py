@@ -177,6 +177,7 @@ with tab3:
                 REGRAS:
                 1. Trânsito/Treino/Estudo = Apenas alimentos "Pronto/Rápido: Sim".
                 2. Refeições que exigem fogão vão para os horários livres.
+                3. CULTURA BRASILEIRA (IMPORTANTE): O café da manhã brasileiro não tem salada ou folhas verdes. NUNCA sugira salada verde, espinafre ou alface de manhã. Para adicionar fibras na refeição matinal, sugira aveia, semente de chia, linhaça ou frutas (ex: mamão, maçã).
                 
                 DESPENSA DISPONÍVEL (Estrito a estes): {dados_despensa}
                 
@@ -216,9 +217,10 @@ with tab4:
                 Não crie um cardápio engessado. Crie um PLANO DE METAS DIÁRIAS (Macros) e um GUIA DE ESTRUTURAÇÃO DE PRATOS por refeição.
                 A ideia é dar liberdade ao paciente para escolher os alimentos, respeitando os macros do horário e o limite de tempo para cozinhar.
                 
-                DIRETRIZES PARA RESISTÊNCIA À INSULINA:
+                DIRETRIZES PARA RESISTÊNCIA À INSULINA E CULTURA BRASILEIRA:
                 - Foco em fibras altas (mínimo 30g/dia).
                 - Estrutura obrigatória das refeições: Carboidrato Complexo SEMPRE deve estar acompanhado de Proteína Magra ou Gordura Boa.
+                - CULTURA BRASILEIRA (IMPORTANTE): NUNCA sugira saladas, folhas verdes (espinafre, couve, rúcula, alface) ou pratos de almoço no café da manhã. O brasileiro come pão, tapioca, ovos, iogurte, frutas, queijo e aveia. Para adicionar fibras pela manhã, use sementes (chia, psyllium) ou farelo de aveia.
                 
                 AGENDA:
                 Acorda: {hora_acordar.strftime('%H:%M')} | Dorme: {hora_dormir.strftime('%H:%M')} | Trab: {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Trânsito: {transito_inicio.strftime('%H:%M')} às {transito_fim.strftime('%H:%M')} | Treino: {treino_inicio.strftime('%H:%M')} às {treino_fim.strftime('%H:%M')} | Estudo: {estudo_inicio.strftime('%H:%M')} às {estudo_fim.strftime('%H:%M')} | Tempo total para cozinhar: {tempo_preparo} min/dia.
