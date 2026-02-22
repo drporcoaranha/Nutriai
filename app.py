@@ -27,7 +27,7 @@ st.markdown("""
 
     /* 3. Título Estilo iOS (Centralizado) */
     .app-header {
-        text-align: center; /* Voltou para o centro */
+        text-align: center;
         padding-bottom: 10px;
         padding-top: 10px;
     }
@@ -67,7 +67,7 @@ st.markdown("""
         padding: 15px !important;
     }
     
-    /* 6. Botões Principais Estilo Apple (Azul e com bordas 14px) */
+    /* 6. Botões Principais Estilo Apple */
     div[data-testid="stButton"] button {
         border-radius: 14px !important; 
         height: 50px !important;
@@ -77,7 +77,6 @@ st.markdown("""
         transition: all 0.2s ease-in-out !important;
     }
     
-    /* Cor do Botão Primário (iOS Blue) */
     div[data-testid="stButton"] button[kind="primary"] {
         background-color: #007AFF !important; 
         color: white !important;
@@ -87,25 +86,32 @@ st.markdown("""
         transform: scale(0.98);
     }
 
-    /* 7. NOVO: Botões Redondos de Ação (Popovers) */
+    /* 7. Botões Redondos de Ação Perfeitos (Círculos Absolutos) */
+    div[data-testid="stPopover"] {
+        display: flex !important;
+        justify-content: center !important; /* Força o botão pro meio da coluna */
+    }
     div[data-testid="stPopover"] > button {
-        width: 65px !important;
-        height: 65px !important;
+        width: 60px !important;
+        height: 60px !important;
+        min-width: 60px !important;
+        max-width: 60px !important;
+        min-height: 60px !important;
+        max-height: 60px !important;
         border-radius: 50% !important; /* Círculo perfeito */
         padding: 0 !important;
-        font-size: 26px !important;
+        font-size: 24px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        margin: 0 auto !important; /* Centraliza dentro da coluna */
         background-color: #FFFFFF !important;
         color: #000000 !important;
-        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1) !important; /* Sombra flutuante */
+        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1) !important;
         border: 1px solid #E5E5EA !important;
         transition: transform 0.1s ease-in-out !important;
     }
     div[data-testid="stPopover"] > button:active {
-        transform: scale(0.9) !important; /* Efeito de aperto nativo */
+        transform: scale(0.9) !important;
         background-color: #F2F2F7 !important;
     }
 
@@ -217,12 +223,12 @@ with tab1:
 with tab2:
     st.markdown("### 🛒 Seu Estoque")
     
-    # AQUI ESTÁ A MÁGICA: Colunas proporcionais para centralizar os botões
+    # Colunas proporcionais para centralizar os botões
     c_espaco_esq, col_add, col_rem, c_espaco_dir = st.columns([1.5, 1, 1, 1.5])
     
     with col_add:
-        # Trocamos o texto por apenas o emoji. O CSS vai deixá-lo redondo!
-        with st.popover("➕", use_container_width=True):
+        # ATENÇÃO: Tirei o use_container_width=True daqui para não achatar o círculo!
+        with st.popover("➕"):
             st.markdown("#### Novo Alimento")
             novo_nome = st.text_input("Alimento")
             nova_qtd = st.number_input("Qtd", min_value=0.0, step=1.0)
@@ -237,7 +243,8 @@ with tab2:
                     st.rerun()
     
     with col_rem:
-        with st.popover("🗑️", use_container_width=True):
+        # ATENÇÃO: Tirei o use_container_width=True daqui também!
+        with st.popover("🗑️"):
             st.markdown("#### Excluir Alimento")
             lista_alimentos = st.session_state.despensa["Alimento"].tolist()
             item_remover = st.selectbox("Apagar:", lista_alimentos)
