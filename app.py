@@ -24,7 +24,6 @@ REDIRECT_URI = st.secrets.get("REDIRECT_URI", "http://localhost:8501")
 def gerar_url_google():
     client_id_limpo = str(GOOGLE_CLIENT_ID).strip().replace('"', '').replace("'", "")
     redirect_limpo = str(REDIRECT_URI).strip().replace('"', '').replace("'", "")
-    
     base_url = "https://accounts.google.com/o/oauth2/v2/auth"
     params = {
         "client_id": client_id_limpo,
@@ -35,7 +34,6 @@ def gerar_url_google():
     }
     return f"{base_url}?{urllib.parse.urlencode(params)}"
 
-# SVG Oficial do Google para o Botão
 GOOGLE_SVG = """
 <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="width:20px;height:20px;margin-right:10px;">
 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
@@ -60,11 +58,11 @@ def carregar_usuarios():
 def criar_conta(username, nome, senha):
     usuarios = carregar_usuarios()
     if username in usuarios: return False
-    
+    # UX 4.0: Adicionado controle de Streaks (Ofensiva)
     usuarios[username] = {
         "nome": nome, 
         "senha": hash_senha(senha),
-        "perfil": {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento Saudável", "atividade": "Moderadamente Ativo", "foto": None}
+        "perfil": {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento Saudável", "atividade": "Moderadamente Ativo", "foto": None, "streak": 1, "last_login": ""}
     }
     with open(ARQUIVO_USUARIOS, "w") as f: json.dump(usuarios, f)
     return True
@@ -131,20 +129,13 @@ def fazer_logout():
 # --- INTERCEPTADOR DO GOOGLE ---
 if not st.session_state.logged_in and "code" in st.query_params:
     codigo_autorizacao = st.query_params["code"]
-    
     client_id_limpo = str(GOOGLE_CLIENT_ID).strip().replace('"', '').replace("'", "")
     client_secret_limpo = str(GOOGLE_CLIENT_SECRET).strip().replace('"', '').replace("'", "")
     redirect_limpo = str(REDIRECT_URI).strip().replace('"', '').replace("'", "")
     
     try:
         token_url = "https://oauth2.googleapis.com/token"
-        token_data = {
-            "code": codigo_autorizacao, 
-            "client_id": client_id_limpo, 
-            "client_secret": client_secret_limpo, 
-            "redirect_uri": redirect_limpo, 
-            "grant_type": "authorization_code"
-        }
+        token_data = {"code": codigo_autorizacao, "client_id": client_id_limpo, "client_secret": client_secret_limpo, "redirect_uri": redirect_limpo, "grant_type": "authorization_code"}
         res = requests.post(token_url, data=token_data)
         if res.status_code == 200:
             access_token = res.json().get("access_token")
@@ -165,12 +156,12 @@ if not st.session_state.logged_in and "code" in st.query_params:
                 st.query_params.clear()
                 st.rerun()
         else:
-            st.error(f"Falha na autenticação com o Google. Código de Erro do Google: {res.status_code}")
+            st.error(f"Falha na autenticação.")
             st.query_params.clear()
     except Exception as e:
-        st.error(f"Erro no login social: {e}")
+        pass
 
-# --- 6. CSS GLOBAL UX 3.5 ---
+# --- 6. CSS GLOBAL UX 4.0 ---
 st.markdown(f"""
     <style>
     [data-testid="stSidebar"] {{ display: none !important; }}
@@ -190,19 +181,18 @@ st.markdown(f"""
     div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{
         border-radius: 20px !important; height: 45px !important; font-weight: 600 !important; font-size: 16px !important; border: 1px solid #E5E5EA !important; transition: all 0.2s ease-in-out !important;
     }}
-    div[data-testid="stButton"] button[kind="primary"] {{
-        background-color: #007AFF !important; color: white !important; border: none !important;
-    }}
+    div[data-testid="stButton"] button[kind="primary"] {{ background-color: #007AFF !important; color: white !important; border: none !important; }}
     
-    /* BOTÃO DO GOOGLE (HTML NATIVO) */
     .btn-google-nativo {{
-        display: flex; align-items: center; justify-content: center;
-        background-color: #FFFFFF; color: #000000; border: 1px solid #D1D1D6;
-        border-radius: 20px; height: 50px; font-weight: 600; font-size: 16px;
-        text-decoration: none; width: 100%; transition: all 0.2s ease-in-out;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        display: flex; align-items: center; justify-content: center; background-color: #FFFFFF; color: #000000; border: 1px solid #D1D1D6; border-radius: 20px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease-in-out; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }}
     .btn-google-nativo:hover {{ background-color: #F8F8F8; transform: scale(0.98); }}
+
+    /* Botão WhatsApp Nativo */
+    .btn-whatsapp {{
+        display: flex; align-items: center; justify-content: center; background-color: #25D366; color: #FFFFFF !important; border-radius: 20px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease-in-out; margin-top: 15px; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.2);
+    }}
+    .btn-whatsapp:hover {{ background-color: #128C7E; transform: scale(0.98); }}
 
     table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; }}
     th {{ color: #8E8E93 !important; font-weight: 600 !important; border-bottom: 1px solid #E5E5EA !important; text-align: left !important; padding-bottom: 8px !important; }}
@@ -251,11 +241,8 @@ if not st.session_state.logged_in:
                 
         st.markdown("<div style='text-align: center; margin: 15px 0; color: #8E8E93;'>ou</div>", unsafe_allow_html=True)
         
-        # A MÁGICA ACONTECE AQUI: target="_top" tira o Google da janelinha e libera o acesso!
         if GOOGLE_CLIENT_ID:
             st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com o Google</a>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<a href="#" class="btn-google-nativo" target="_top" title="Requer configuração no Google Cloud">{GOOGLE_SVG} Continuar com o Google (Desativado)</a>', unsafe_allow_html=True)
 
     with st.expander("Ainda não tem conta? Clique aqui para criar"):
         cad_nome = st.text_input("Como quer ser chamado?")
@@ -270,6 +257,27 @@ if not st.session_state.logged_in:
 # MÓDULO 2: O APLICATIVO (LOGADO)
 # ==========================================
 else:
+    # LÓGICA DE GAMIFICAÇÃO (STREAKS) 
+    hoje = datetime.now(fuso_local).date()
+    hoje_str = hoje.strftime("%Y-%m-%d")
+    ontem = hoje - timedelta(days=1)
+    
+    last_login_str = st.session_state.perfil.get("last_login", "")
+    streak_atual = st.session_state.perfil.get("streak", 1)
+
+    if last_login_str:
+        last_login_date = datetime.strptime(last_login_str, "%Y-%m-%d").date()
+        if last_login_date == ontem:
+            streak_atual += 1  # Mantém a ofensiva
+        elif last_login_date < ontem:
+            streak_atual = 1   # Perdeu a ofensiva, zera
+    
+    # Atualiza se for um novo dia
+    if last_login_str != hoje_str:
+        st.session_state.perfil["last_login"] = hoje_str
+        st.session_state.perfil["streak"] = streak_atual
+        salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+
     hora_atual = datetime.now(fuso_local).hour
     if hora_atual < 12: saudacao, icone_tempo = "Bom dia", "☀️"
     elif hora_atual < 18: saudacao, icone_tempo = "Boa tarde", "☕"
@@ -281,7 +289,7 @@ else:
         st.markdown(f"""
             <div style="text-align: center; padding-top: 5px;">
                 <h1 style="color: #000; font-weight: 800; font-size: 2rem; margin-bottom: 0;">NutryAi 🍏</h1>
-                <p style="color: #8E8E93; font-size: 0.9rem; margin-top: -5px;">{saudacao}, {st.session_state.nome_usuario}!</p>
+                <p style="color: #8E8E93; font-size: 0.9rem; margin-top: -5px;">{saudacao}, {st.session_state.nome_usuario}! <span style="color:#FF9500; font-weight:bold;">🔥 {streak_atual}</span></p>
             </div>
         """, unsafe_allow_html=True)
         
@@ -311,10 +319,8 @@ else:
             with tab_bio:
                 novo_peso = st.number_input("Peso (kg)", min_value=30.0, max_value=250.0, value=float(p_peso), step=0.5)
                 nova_altura = st.number_input("Altura (cm)", min_value=100, max_value=230, value=int(p_altura))
-                
                 objetivos = ["Emagrecimento Saudável", "Hipertrofia (Massa)", "Manutenção", "Controle Glicêmico"]
                 novo_obj = st.selectbox("Objetivo", objetivos, index=objetivos.index(p_obj) if p_obj in objetivos else 0)
-                
                 atividades = ["Sedentário", "Levemente Ativo", "Moderadamente Ativo", "Muito Ativo"]
                 nova_atv = st.selectbox("Atividade", atividades, index=atividades.index(p_atv) if p_atv in atividades else 1)
             
@@ -326,15 +332,14 @@ else:
                     img.convert('RGB').save(buffered, format="JPEG")
                     foto_salva = base64.b64encode(buffered.getvalue()).decode("utf-8")
                 
-                novo_perfil = {"idade": nova_idade, "peso": novo_peso, "altura": nova_altura, "objetivo": novo_obj, "atividade": nova_atv, "foto": foto_salva}
-                st.session_state.perfil = novo_perfil
+                # Preserva os streaks ao salvar o perfil
+                st.session_state.perfil.update({"idade": nova_idade, "peso": novo_peso, "altura": nova_altura, "objetivo": novo_obj, "atividade": nova_atv, "foto": foto_salva})
                 st.session_state.nome_usuario = novo_nome
-                salvar_perfil(st.session_state.username, novo_nome, novo_perfil)
+                salvar_perfil(st.session_state.username, novo_nome, st.session_state.perfil)
                 st.rerun() 
             
             st.divider()
-            if st.button("🚪 Sair da Conta", use_container_width=True):
-                fazer_logout()
+            if st.button("🚪 Sair da Conta", use_container_width=True): fazer_logout()
 
     dados_perfil_ia = f"Paciente de {st.session_state.perfil.get('idade', 30)} anos, {st.session_state.perfil.get('peso', 70)}kg, {st.session_state.perfil.get('altura', 170)}cm. Objetivo: {st.session_state.perfil.get('objetivo', 'Emagrecimento')}. Atividade: {st.session_state.perfil.get('atividade', 'Moderada')}."
 
@@ -401,14 +406,27 @@ else:
         df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
         df_visual.set_index("Alimento", inplace=True)
         st.table(df_visual[["Disponível", "Pronto/Rápido"]])
+        
         st.divider()
         st.markdown("### 📝 Lista do Mercado")
         estoque_zerado = st.session_state.despensa[st.session_state.despensa["Quantidade"] <= 0]
-        if estoque_zerado.empty: st.info("Tudo abastecido por enquanto.")
+        
+        if estoque_zerado.empty: 
+            st.info("Tudo abastecido por enquanto.")
         else:
-            st.warning("Atenção! Repor:")
-            for index, row in estoque_zerado.iterrows(): st.write(f"- {row['Alimento']}")
-        anotacoes = st.text_area("O que mais precisa trazer?", height=80, placeholder="Ex: Adoçante, café...")
+            st.warning("Atenção! Você precisa repor:")
+            texto_zap = "🛒 *Lista do Mercado - NutryAi*\n\n"
+            for index, row in estoque_zerado.iterrows(): 
+                st.write(f"- {row['Alimento']}")
+                texto_zap += f"• {row['Alimento']}\n"
+            
+            # UX 4.0: BOTÃO DO WHATSAPP
+            texto_zap += "\n_Gerado pelo seu app NutryAi_ 🍏"
+            link_whatsapp = f"https://api.whatsapp.com/send?text={urllib.parse.quote(texto_zap)}"
+            st.markdown(f'<a href="{link_whatsapp}" class="btn-whatsapp" target="_blank">🟢 Enviar para WhatsApp</a>', unsafe_allow_html=True)
+            
+        st.write("")
+        anotacoes = st.text_area("Bloco de notas extra:", height=80, placeholder="Ex: Papel toalha, adoçante...")
         if st.button("Salvar Anotações", use_container_width=True): st.toast("✅ Anotações salvas!")
 
     with tab3:
