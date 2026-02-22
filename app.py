@@ -11,14 +11,12 @@ import requests
 from PIL import Image
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (NutryAi) ---
-st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered") 
+st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered", initial_sidebar_state="collapsed") 
 fuso_local = timezone(timedelta(hours=-3))
 
 # --- 2. CONFIGURAÇÕES DO GOOGLE LOGIN (OAUTH) ---
-# Você vai colocar essas chaves no st.secrets depois!
 GOOGLE_CLIENT_ID = st.secrets.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = st.secrets.get("GOOGLE_CLIENT_SECRET", "")
-# Se estiver rodando localmente é http://localhost:8501. No Cloud, será a URL do seu app (ex: https://nutryai.streamlit.app)
 REDIRECT_URI = st.secrets.get("REDIRECT_URI", "http://localhost:8501") 
 
 def gerar_url_google():
@@ -32,7 +30,7 @@ def gerar_url_google():
     }
     return f"{base_url}?{urllib.parse.urlencode(params)}"
 
-# --- 3. SISTEMA DE BANCO DE DADOS (USUÁRIOS PADRÃO) ---
+# --- 3. SISTEMA DE BANCO DE DADOS (USUÁRIOS E PERFIL) ---
 ARQUIVO_USUARIOS = "usuarios_db.json"
 
 def hash_senha(senha):
@@ -47,15 +45,27 @@ def carregar_usuarios():
 def criar_conta(username, nome, senha):
     usuarios = carregar_usuarios()
     if username in usuarios: return False
-    usuarios[username] = {"nome": nome, "senha": hash_senha(senha)}
+    
+    # Cria conta já com um perfil em branco
+    usuarios[username] = {
+        "nome": nome, 
+        "senha": hash_senha(senha),
+        "perfil": {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Manutenção Saudável", "atividade": "Moderadamente Ativo"}
+    }
     with open(ARQUIVO_USUARIOS, "w") as f: json.dump(usuarios, f)
     return True
 
 def validar_login(username, senha):
     usuarios = carregar_usuarios()
     if username in usuarios and usuarios[username]["senha"] == hash_senha(senha):
-        return usuarios[username]["nome"]
+        return usuarios[username] # Retorna o dicionário inteiro agora (nome + perfil)
     return None
+
+def salvar_perfil(username, perfil_data):
+    usuarios = carregar_usuarios()
+    if username in usuarios:
+        usuarios[username]["perfil"] = perfil_data
+        with open(ARQUIVO_USUARIOS, "w") as f: json.dump(usuarios, f)
 
 # Funções de Estoque Isoladas por Usuário
 def carregar_despensa(username):
@@ -92,6 +102,7 @@ if "GEMINI_API_KEY" in st.secrets:
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'username' not in st.session_state: st.session_state.username = None
 if 'nome_usuario' not in st.session_state: st.session_state.nome_usuario = None
+if 'perfil' not in st.session_state: st.session_state.perfil = {}
 if 'despensa' not in st.session_state: st.session_state.despensa = None
 if 'cardapio_atual' not in st.session_state: st.session_state.cardapio_atual = None
 if 'cardapio_ideal' not in st.session_state: st.session_state.cardapio_ideal = None
@@ -100,35 +111,32 @@ if 'chat_history' not in st.session_state: st.session_state.chat_history = []
 
 def fazer_logout():
     for key in list(st.session_state.keys()): del st.session_state[key]
-    st.query_params.clear() # Limpa parâmetros da URL
+    st.query_params.clear() 
     st.rerun()
 
 # --- INTERCEPTADOR DO RETORNO DO GOOGLE ---
 if not st.session_state.logged_in and "code" in st.query_params:
     codigo_autorizacao = st.query_params["code"]
     try:
-        # Troca o código pelo Token de Acesso
         token_url = "https://oauth2.googleapis.com/token"
-        token_data = {
-            "code": codigo_autorizacao,
-            "client_id": GOOGLE_CLIENT_ID,
-            "client_secret": GOOGLE_CLIENT_SECRET,
-            "redirect_uri": REDIRECT_URI,
-            "grant_type": "authorization_code"
-        }
+        token_data = {"code": codigo_autorizacao, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "redirect_uri": REDIRECT_URI, "grant_type": "authorization_code"}
         res = requests.post(token_url, data=token_data)
-        
         if res.status_code == 200:
             access_token = res.json().get("access_token")
-            # Pega as informações do usuário (Nome e E-mail)
-            user_info_url = "https://www.googleapis.com/oauth2/v2/userinfo"
-            user_res = requests.get(user_info_url, headers={"Authorization": f"Bearer {access_token}"})
-            
+            user_res = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
             if user_res.status_code == 200:
                 google_user = user_res.json()
                 st.session_state.logged_in = True
-                st.session_state.username = google_user.get("email") # Usamos o e-mail como ID único
-                st.session_state.nome_usuario = google_user.get("given_name", "Usuário") # Primeiro nome
+                st.session_state.username = google_user.get("email") 
+                st.session_state.nome_usuario = google_user.get("given_name", "Usuário") 
+                
+                # Registra o Google user no banco se for a primeira vez para ter perfil
+                usuarios = carregar_usuarios()
+                if st.session_state.username not in usuarios:
+                    criar_conta(st.session_state.username, st.session_state.nome_usuario, "google_sso_senha_dummy")
+                    usuarios = carregar_usuarios()
+                
+                st.session_state.perfil = usuarios[st.session_state.username].get("perfil", {})
                 st.session_state.despensa = carregar_despensa(st.session_state.username)
                 st.query_params.clear()
                 st.rerun()
@@ -141,8 +149,15 @@ if not st.session_state.logged_in and "code" in st.query_params:
 # --- 6. CSS GLOBAL UX 3.0 ---
 st.markdown(f"""
     <style>
-    #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
-    .block-container {{padding-top: 2rem; padding-bottom: 5rem; max-width: 600px;}}
+    /* Liberamos o HEADER para o botão do Menu Lateral aparecer! */
+    #MainMenu {{visibility: hidden;}} 
+    footer {{visibility: hidden;}} 
+    
+    /* Esconde os botões inúteis do header do Streamlit, deixando só o menu hamburger */
+    [data-testid="stHeaderActionElements"] {{ display: none; }}
+    header {{ background-color: transparent !important; }}
+
+    .block-container {{padding-top: 1rem; padding-bottom: 5rem; max-width: 600px;}}
     .stApp {{ background-color: #F2F2F7 !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Helvetica, Arial, sans-serif !important; }}
     
     div[data-testid="stVerticalBlockBorderWrapper"] > div {{
@@ -166,12 +181,14 @@ st.markdown(f"""
         background-color: #0062CC !important; transform: scale(0.98);
     }}
     
-    /* ESTILO ESPECÍFICO DO LINK BUTTON DO GOOGLE */
     div[data-testid="stLinkButton"] a {{
         background-color: #FFFFFF !important; color: #000000 !important; border: 1px solid #D1D1D6 !important; border-radius: 20px !important; height: 50px !important; font-weight: 600 !important; font-size: 16px !important; display: flex; align-items: center; justify-content: center; text-decoration: none !important; transition: all 0.2s ease-in-out !important;
     }}
-    div[data-testid="stLinkButton"] a:hover {{
-        background-color: #F2F2F7 !important; transform: scale(0.98);
+    
+    /* Estilizando o Sidebar (Drawer) */
+    [data-testid="stSidebar"] {{
+        background-color: #FFFFFF !important;
+        border-right: 1px solid #E5E5EA !important;
     }}
 
     table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; }}
@@ -209,11 +226,12 @@ if not st.session_state.logged_in:
         
         if st.button("Entrar", use_container_width=True, type="primary"):
             if login_user and login_senha:
-                nome_valido = validar_login(login_user, login_senha)
-                if nome_valido:
+                dados_usuario = validar_login(login_user, login_senha)
+                if dados_usuario:
                     st.session_state.logged_in = True
                     st.session_state.username = login_user
-                    st.session_state.nome_usuario = nome_valido
+                    st.session_state.nome_usuario = dados_usuario["nome"]
+                    st.session_state.perfil = dados_usuario.get("perfil", {})
                     st.session_state.despensa = carregar_despensa(login_user)
                     st.rerun()
                 else: st.error("Usuário ou senha incorretos.")
@@ -221,11 +239,20 @@ if not st.session_state.logged_in:
                 
         st.markdown("<div style='text-align: center; margin: 15px 0; color: #8E8E93;'>ou</div>", unsafe_allow_html=True)
         
-        # BOTÃO REAL DO GOOGLE: Ele redireciona para a URL gerada pela nossa função
         if GOOGLE_CLIENT_ID:
             st.link_button("🌐 Continuar com o Google", gerar_url_google(), use_container_width=True)
         else:
-            st.warning("⚠️ Chaves do Google não configuradas nos Secrets.")
+            if st.button("🌐 Continuar com o Google (Simulador)"):
+                st.session_state.logged_in = True
+                st.session_state.username = "usuario_google"
+                st.session_state.nome_usuario = "Visitante"
+                usuarios = carregar_usuarios()
+                if "usuario_google" not in usuarios:
+                    criar_conta("usuario_google", "Visitante", "dummy")
+                    usuarios = carregar_usuarios()
+                st.session_state.perfil = usuarios["usuario_google"].get("perfil", {})
+                st.session_state.despensa = carregar_despensa("usuario_google")
+                st.rerun()
 
     with st.expander("Ainda não tem conta? Clique aqui para criar"):
         cad_nome = st.text_input("Como quer ser chamado?")
@@ -237,24 +264,57 @@ if not st.session_state.logged_in:
                 else: st.error("Esse usuário já existe. Tente outro nome.")
 
 # ==========================================
-# MÓDULO 2: O APLICATIVO PRINCIPAL (LOGADO)
+# MÓDULO 2: O APLICATIVO PRINCIPAL E SIDEBAR
 # ==========================================
 else:
+    # --- MENU LATERAL (SIDEBAR DRAWER) ---
+    with st.sidebar:
+        st.markdown(f"## 👤 Olá, {st.session_state.nome_usuario}")
+        st.caption("Ajuste sua biometria para cálculos precisos.")
+        
+        # Carrega dados salvos ou padrões
+        p_idade = st.session_state.perfil.get("idade", 30)
+        p_peso = st.session_state.perfil.get("peso", 70.0)
+        p_altura = st.session_state.perfil.get("altura", 170)
+        p_obj = st.session_state.perfil.get("objetivo", "Emagrecimento Saudável")
+        p_atv = st.session_state.perfil.get("atividade", "Moderadamente Ativo")
+        
+        with st.container(border=True):
+            nova_idade = st.number_input("Idade", min_value=10, max_value=120, value=p_idade)
+            novo_peso = st.number_input("Peso (kg)", min_value=30.0, max_value=250.0, value=float(p_peso), step=0.5)
+            nova_altura = st.number_input("Altura (cm)", min_value=100, max_value=230, value=int(p_altura))
+            
+            objetivos = ["Emagrecimento Saudável", "Hipertrofia (Ganho de Massa)", "Manutenção", "Foco Extremo em Controle Glicêmico"]
+            novo_obj = st.selectbox("Objetivo Principal", objetivos, index=objetivos.index(p_obj) if p_obj in objetivos else 0)
+            
+            atividades = ["Sedentário (Trabalha sentado)", "Levemente Ativo (Caminhadas)", "Moderadamente Ativo (Treino 3-4x)", "Muito Ativo (Treino pesado diário)"]
+            nova_atv = st.selectbox("Nível de Atividade", atividades, index=atividades.index(p_atv) if p_atv in atividades else 1)
+            
+            if st.button("💾 Salvar Perfil", type="primary", use_container_width=True):
+                novo_perfil = {"idade": nova_idade, "peso": novo_peso, "altura": nova_altura, "objetivo": novo_obj, "atividade": nova_atv}
+                st.session_state.perfil = novo_perfil
+                salvar_perfil(st.session_state.username, novo_perfil)
+                st.toast("✅ Perfil Biométrico atualizado!")
+        
+        st.divider()
+        if st.button("🚪 Sair da Conta (Logout)", use_container_width=True):
+            fazer_logout()
+
+    # --- TELA PRINCIPAL DO APP ---
     hora_atual = datetime.now(fuso_local).hour
     if hora_atual < 12: saudacao, icone_tempo, msg_contexto = "Bom dia", "☀️", "Pronto para dominar sua insulina hoje?"
     elif hora_atual < 18: saudacao, icone_tempo, msg_contexto = "Boa tarde", "☕", "Mantendo o foco na sua rotina à tarde!"
     else: saudacao, icone_tempo, msg_contexto = "Boa noite", "🌙", "Quase lá, foco na reta final do seu dia."
 
-    col_title, col_logout = st.columns([4, 1], vertical_alignment="center")
-    with col_title:
-        st.markdown(f"""
-            <div style="padding-bottom: 10px; padding-top: 10px;">
-                <h1 style="color: #000; font-weight: 800; font-size: 2rem; margin-bottom: 0;">NutryAi 🍏</h1>
-                <p style="color: #8E8E93; font-size: 0.95rem; margin-top: -5px;"><b>{saudacao}, {st.session_state.nome_usuario}! {icone_tempo}</b><br>{msg_contexto}</p>
-            </div>
-        """, unsafe_allow_html=True)
-    with col_logout:
-        if st.button("Sair"): fazer_logout()
+    st.markdown(f"""
+        <div style="padding-bottom: 10px; padding-top: 5px; margin-left: 5px;">
+            <h1 style="color: #000; font-weight: 800; font-size: 2.2rem; margin-bottom: 0;">NutryAi 🍏</h1>
+            <p style="color: #8E8E93; font-size: 0.95rem; margin-top: -5px;"><b>{saudacao}, {st.session_state.nome_usuario}! {icone_tempo}</b><br>{msg_contexto}</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # String formatada com os dados do paciente para enviar à IA
+    dados_perfil_ia = f"Paciente de {st.session_state.perfil.get('idade', 30)} anos, {st.session_state.perfil.get('peso', 70)}kg, {st.session_state.perfil.get('altura', 170)}cm. Objetivo Clínico: {st.session_state.perfil.get('objetivo', 'Emagrecimento')}. Nível de Atividade: {st.session_state.perfil.get('atividade', 'Moderada')}."
 
     st.markdown('<div class="app-tabs">', unsafe_allow_html=True)
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["🕒 Agenda", "📦 Estoque", "🍽️ Seu Dia", "👩‍⚕️ Plano Ideal", "💬 Chat"])
@@ -335,19 +395,25 @@ else:
             <div style='text-align: center; padding: 30px 20px; background-color: #FFFFFF; border-radius: 14px; box-shadow: 0px 2px 10px rgba(0,0,0,0.04); margin-bottom: 20px; margin-top: 10px;'>
                 <h1 style='font-size: 3.5rem; margin-bottom: 5px;'>🍽️</h1>
                 <h3 style='color: #000000; font-weight: 700; margin-bottom: 5px;'>Seu dia em branco</h3>
-                <p style='color: #8E8E93; font-size: 0.95rem; margin-bottom: 25px;'>Vamos criar um plano de ataque inteligente usando apenas o que tem na geladeira hoje.</p>
+                <p style='color: #8E8E93; font-size: 0.95rem; margin-bottom: 25px;'>Vamos criar um plano de ataque usando seu perfil e o que tem na geladeira hoje.</p>
             </div>
             """, unsafe_allow_html=True)
+            
         if st.button("⚡ Gerar Cardápio de Hoje", use_container_width=True, type="primary"):
             if not api_configurada: st.error("⚠️ Configure a chave de API.")
             else:
-                with st.spinner("Mapeando seu dia e criando a logística..."):
+                with st.spinner("Analisando sua biometria e calculando logística..."):
                     despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
                     prompt = f"""
                     Nutricionista Clínico especialista em Resistência à Insulina (RI). Crie o cardápio real de hoje usando APENAS O ESTOQUE.
+                    
+                    BIOMETRIA DO PACIENTE (Calcule as necessidades calóricas baseadas nisso):
+                    {dados_perfil_ia}
+                    
                     REGRA: NUNCA sugira carboidratos "solteiros". NUNCA sugira salada verde de manhã. Use aveia/chia/fruta matinal.
                     AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Prep. Máx: {tempo_preparo} min.
                     ESTOQUE: {despensa_ativa.to_dict(orient="records")}
+                    
                     Retorne JSON: {{"resumo_diario": {{"calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "ingredientes": "Qtd", "instrucao_preparo": "Instrução", "macros": {{"calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g"}}, "uso_despensa": [{{"nome_exato": "NOME", "qtd_descontada": 150}}]}}]}}
                     """
                     try:
@@ -419,17 +485,23 @@ else:
             <div style='text-align: center; padding: 30px 20px; background-color: #FFFFFF; border-radius: 14px; box-shadow: 0px 2px 10px rgba(0,0,0,0.04); margin-bottom: 20px; margin-top: 10px;'>
                 <h1 style='font-size: 3.5rem; margin-bottom: 5px;'>👩‍⚕️</h1>
                 <h3 style='color: #000000; font-weight: 700; margin-bottom: 5px;'>Plano Padrão Ouro</h3>
-                <p style='color: #8E8E93; font-size: 0.95rem; margin-bottom: 25px;'>A Nutri vai criar seu plano perfeito (ignorando o estoque) para usar no mercado.</p>
+                <p style='color: #8E8E93; font-size: 0.95rem; margin-bottom: 25px;'>A Nutri vai criar seu plano perfeito (baseado no seu Perfil) para você usar no mercado.</p>
             </div>
             """, unsafe_allow_html=True)
+            
         if st.button("✨ Descobrir Meu Plano Ideal", use_container_width=True, type="primary"):
             if not api_configurada: st.error("⚠️ Configure a chave de API.")
             else:
-                with st.spinner("Calculando mapa nutricional..."):
+                with st.spinner("Calculando o mapa nutricional para o seu biotipo..."):
                     prompt_ideal = f"""
                     Nutricionista especialista em RI e Dieta Flexível. Crie um PLANO DE METAS e GUIA DE ESTRUTURAÇÃO DE PRATOS. IGNORAR ESTOQUE.
+                    
+                    BIOMETRIA DO PACIENTE:
+                    {dados_perfil_ia}
+                    
                     REGRAS: Carbo Complexo SEMPRE com Proteína/Gordura Boa. Nenhuma salada matinal.
                     AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Tempo cozinhar: {tempo_preparo} min.
+                    
                     Retorne JSON: {{"metas_diarias": {{"calorias": "2000 kcal", "carboidratos": "150g", "proteinas": "140g", "gorduras": "60g", "fibras": "30g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "alvo_macros": "Carbos: 30g | Prot: 25g", "estrutura_prato": "Regra de porções", "sugestoes_flexiveis": "3 opções", "instrucao_clinica": "Explicação clínica"}}]}}
                     """
                     try:
@@ -473,7 +545,7 @@ else:
                 with st.chat_message("assistant"):
                     with st.spinner("A Nutri está digitando..."):
                         try:
-                            conteudo_ia = ["Você é a NutryAi, Nutricionista Clínica especialista em Resistência à Insulina. Seja prestativa, use tom amigável. Avalie impactos na insulina se o paciente perguntar sobre alimentos ou fotos.", prompt_chat]
+                            conteudo_ia = [f"Você é a NutryAi, Nutricionista Clínica. O paciente tem o seguinte perfil: {dados_perfil_ia}. Seja prestativa, use tom amigável. Avalie impactos na insulina se o paciente perguntar sobre alimentos ou fotos.", prompt_chat]
                             if foto_upload:
                                 imagem_pil = Image.open(foto_upload)
                                 conteudo_ia.append(imagem_pil)
