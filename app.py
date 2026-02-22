@@ -22,11 +22,15 @@ GOOGLE_CLIENT_SECRET = st.secrets.get("GOOGLE_CLIENT_SECRET", "")
 REDIRECT_URI = st.secrets.get("REDIRECT_URI", "http://localhost:8501") 
 
 def gerar_url_google():
+    # VACINA ANTI-SUJEIRA: Remove espaços, aspas e quebras de linha dos secrets
+    client_id_limpo = str(GOOGLE_CLIENT_ID).strip().replace('"', '').replace("'", "")
+    redirect_limpo = str(REDIRECT_URI).strip().replace('"', '').replace("'", "")
+    
     base_url = "https://accounts.google.com/o/oauth2/v2/auth"
     params = {
-        "client_id": GOOGLE_CLIENT_ID,
+        "client_id": client_id_limpo,
         "response_type": "code",
-        "redirect_uri": REDIRECT_URI,
+        "redirect_uri": redirect_limpo,
         "scope": "openid email profile",
         "prompt": "select_account"
     }
@@ -128,9 +132,21 @@ def fazer_logout():
 # --- INTERCEPTADOR DO GOOGLE ---
 if not st.session_state.logged_in and "code" in st.query_params:
     codigo_autorizacao = st.query_params["code"]
+    
+    # Vacina aplicada também na hora de validar o token
+    client_id_limpo = str(GOOGLE_CLIENT_ID).strip().replace('"', '').replace("'", "")
+    client_secret_limpo = str(GOOGLE_CLIENT_SECRET).strip().replace('"', '').replace("'", "")
+    redirect_limpo = str(REDIRECT_URI).strip().replace('"', '').replace("'", "")
+    
     try:
         token_url = "https://oauth2.googleapis.com/token"
-        token_data = {"code": codigo_autorizacao, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "redirect_uri": REDIRECT_URI, "grant_type": "authorization_code"}
+        token_data = {
+            "code": codigo_autorizacao, 
+            "client_id": client_id_limpo, 
+            "client_secret": client_secret_limpo, 
+            "redirect_uri": redirect_limpo, 
+            "grant_type": "authorization_code"
+        }
         res = requests.post(token_url, data=token_data)
         if res.status_code == 200:
             access_token = res.json().get("access_token")
@@ -151,7 +167,7 @@ if not st.session_state.logged_in and "code" in st.query_params:
                 st.query_params.clear()
                 st.rerun()
         else:
-            st.error("Falha na autenticação com o Google.")
+            st.error(f"Falha na autenticação com o Google. Código de Erro do Google: {res.status_code}")
             st.query_params.clear()
     except Exception as e:
         st.error(f"Erro no login social: {e}")
@@ -242,17 +258,6 @@ if not st.session_state.logged_in:
             st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_self">{GOOGLE_SVG} Continuar com o Google</a>', unsafe_allow_html=True)
         else:
             st.markdown(f'<a href="#" class="btn-google-nativo" target="_self" title="Requer configuração no Google Cloud">{GOOGLE_SVG} Continuar com o Google (Desativado)</a>', unsafe_allow_html=True)
-            if st.button("🔌 Simular Login Rápido (Teste)"):
-                st.session_state.logged_in = True
-                st.session_state.username = "usuario_google"
-                st.session_state.nome_usuario = "Visitante"
-                usuarios = carregar_usuarios()
-                if "usuario_google" not in usuarios:
-                    criar_conta("usuario_google", "Visitante", "dummy")
-                    usuarios = carregar_usuarios()
-                st.session_state.perfil = usuarios["usuario_google"].get("perfil", {})
-                st.session_state.despensa = carregar_despensa("usuario_google")
-                st.rerun()
 
     with st.expander("Ainda não tem conta? Clique aqui para criar"):
         cad_nome = st.text_input("Como quer ser chamado?")
@@ -318,10 +323,9 @@ else:
                 nova_atv = st.selectbox("Atividade", atividades, index=atividades.index(p_atv) if p_atv in atividades else 1)
             
             if st.button("💾 Salvar Perfil", type="primary", use_container_width=True):
-                # Processamento da imagem para Base64
                 if nova_foto is not None:
                     img = Image.open(nova_foto)
-                    img.thumbnail((200, 200)) # Corta a imagem pra não pesar o banco
+                    img.thumbnail((200, 200)) 
                     buffered = BytesIO()
                     img.convert('RGB').save(buffered, format="JPEG")
                     foto_salva = base64.b64encode(buffered.getvalue()).decode("utf-8")
