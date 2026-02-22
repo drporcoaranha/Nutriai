@@ -20,7 +20,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🍏 NutryAi")
-st.caption("Seu assistente de nutrição dinâmico de 24 horas.")
+st.caption("Seu assistente de nutrição e gestão de tempo em blocos.")
 
 # --- 2. LÓGICA DE MEMÓRIA E ARQUIVOS ---
 ARQUIVO_DESPENSA = "despensa.csv"
@@ -30,10 +30,10 @@ def carregar_despensa():
         return pd.read_csv(ARQUIVO_DESPENSA)
     else:
         df = pd.DataFrame({
-            "Alimento": ["Peito de Frango", "Arroz Branco", "Ovo", "Whey Protein"],
-            "Quantidade": [500.0, 1000.0, 12.0, 900.0],
-            "Unidade": ["g", "g", "un", "g"],
-            "Pronto/Rápido": ["Não", "Não", "Sim", "Sim"]
+            "Alimento": ["Peito de Frango", "Arroz Branco", "Ovo", "Whey Protein", "Banana", "Barra de Cereal"],
+            "Quantidade": [500.0, 1000.0, 12.0, 900.0, 6.0, 5.0],
+            "Unidade": ["g", "g", "un", "g", "un", "un"],
+            "Pronto/Rápido": ["Não", "Não", "Sim", "Sim", "Sim", "Sim"]
         })
         df.to_csv(ARQUIVO_DESPENSA, index=False)
         return df
@@ -41,12 +41,11 @@ def carregar_despensa():
 def salvar_despensa(df):
     df.to_csv(ARQUIVO_DESPENSA, index=False)
 
-# --- 3. VERIFICAÇÃO SEGURA DA CHAVE DE API (OTIMIZADO) ---
+# --- 3. VERIFICAÇÃO SEGURA DA CHAVE DE API ---
 api_configurada = False
 if "GEMINI_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        # VOLTAMOS PARA A VERSÃO TOP DE LINHA (Como a sua cota é nova, não dará erro 429)
         modelo = genai.GenerativeModel('gemini-2.5-flash') 
         api_configurada = True
     except Exception as e:
@@ -63,28 +62,37 @@ if 'consumidos' not in st.session_state:
     st.session_state.consumidos = set()
 
 # --- 5. INTERFACE VISUAL (ABAS) ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🕒 Rotina", "📦 Estoque", "🧠 Gerador", "🔴 Ao Vivo", "📝 Compras"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🕒 Agenda", "📦 Estoque", "🧠 Gerador", "🔴 Ao Vivo", "📝 Compras"])
 
-# --- ABA 1: ROTINA ---
+# --- ABA 1: ROTINA EM BLOCOS DE TEMPO (NOVA) ---
 with tab1:
     with st.container(border=True):
-        st.subheader("Configuração do Dia")
+        st.subheader("Blocos de Tempo Ocupado")
+        st.write("Defina seus horários compromissados. A IA usará os **buracos** da sua agenda para encaixar as refeições.")
         
+        # Agrupamento para facilitar o preenchimento no celular
         col1, col2 = st.columns(2)
         with col1:
-            hora_acordar = st.time_input("☀️ Acordar", time(6, 0))
-            hora_dormir = st.time_input("🌙 Dormir", time(23, 0))
+            hora_acordar = st.time_input("☀️ Acordar", time(6, 30))
+            trab_inicio = st.time_input("💼 Início Trabalho", time(8, 0))
+            transito_inicio = st.time_input("🚗 Início Trânsito", time(17, 30))
+            treino_inicio = st.time_input("💪 Início Treino", time(19, 0))
+            estudo_inicio = st.time_input("📚 Início Estudo", time(20, 30))
+            
         with col2:
-            trabalho_inicio = st.time_input("💼 Início Trabalho", time(8, 0))
-            trabalho_fim = st.time_input("🏠 Fim Trabalho", time(18, 0))
+            hora_dormir = st.time_input("🌙 Dormir", time(23, 0))
+            trab_fim = st.time_input("🏠 Fim Trabalho", time(17, 30))
+            transito_fim = st.time_input("🏁 Fim Trânsito", time(18, 30))
+            treino_fim = st.time_input("🚿 Fim Treino", time(20, 0))
+            estudo_fim = st.time_input("📝 Fim Estudo", time(22, 0))
         
         st.divider()
-        tempo_preparo = st.slider("⏱️ Tempo livre para cozinhar (minutos)", 0, 120, 20)
+        tempo_preparo = st.slider("⏱️ Tempo livre diário para cozinhar (minutos)", 0, 120, 30)
         
-        if st.button("Salvar Rotina", use_container_width=True, type="primary"):
+        if st.button("Salvar Agenda", use_container_width=True, type="primary"):
             st.session_state.cardapio_atual = None
             st.session_state.consumidos = set()
-            st.success("Rotina salva com sucesso!")
+            st.success("Agenda salva! A IA agora conhece seus blocos de tempo.")
 
 # --- ABA 2: ESTOQUE (Despensa) ---
 with tab2:
@@ -97,8 +105,8 @@ with tab2:
             with st.popover("➕ Novo Alimento", use_container_width=True):
                 novo_nome = st.text_input("Nome")
                 nova_qtd = st.number_input("Qtd", min_value=0.0, step=1.0)
-                nova_unidade = st.selectbox("Medida", ["g", "kg", "ml", "L", "un"])
-                novo_pronto = st.radio("Preparo Rápido?", ["Não", "Sim"], horizontal=True)
+                nova_unidade = st.selectbox("Medida", ["g", "kg", "ml", "L", "un", "dose"])
+                novo_pronto = st.radio("Preparo Rápido/Consumo no Carro?", ["Não", "Sim"], horizontal=True)
                 
                 if st.button("Adicionar"):
                     if novo_nome:
@@ -127,29 +135,43 @@ with tab2:
     df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
     st.dataframe(df_visual[["Alimento", "Disponível", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
 
-# --- ABA 3: MOTOR DA IA (CÓDIGO LEVE E DIRETO) ---
+# --- ABA 3: MOTOR DA IA (COM REGRAS DE TIME BLOCKING) ---
 with tab3:
-    st.info("A IA vai cruzar seus horários com o estoque atual e montar sua logística completa.")
+    st.info("A IA mapeará seus blocos ocupados e encaixará refeições nos espaços livres ou no trânsito.")
     st.write("") 
     
     if st.button("⚡ Gerar Cardápio Inteligente", use_container_width=True, type="primary"):
         if not api_configurada:
             st.error("Configure sua chave de API nos secrets.")
         else:
-            with st.spinner("Conectando à IA e calculando cardápio..."):
+            with st.spinner("Mapeando blocos de tempo e calculando cardápio..."):
                 despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
                 dados_despensa = despensa_ativa.to_dict(orient="records")
                 
                 prompt = f"""
-                Você é um nutricionista clínico e assistente de logística. 
-                Monte um cardápio de 24h.
-                ROTINA: Acordo: {hora_acordar.strftime('%H:%M')} | Durmo: {hora_dormir.strftime('%H:%M')} | Trabalho: {trabalho_inicio.strftime('%H:%M')} às {trabalho_fim.strftime('%H:%M')} | Tempo cozinhar: {tempo_preparo} min.
-                DESPENSA DISPONÍVEL (Use estritamente estes alimentos): {dados_despensa}
+                Você é um Nutricionista de Alta Performance especialista em 'Time Blocking' (Gestão de Tempo).
+                Sua missão é criar um plano alimentar de 24h que se adapte CIRURGICAMENTE à agenda restrita do paciente.
+                
+                AGENDA DE BLOCOS OCUPADOS DO PACIENTE:
+                - ☀️ Acorda às: {hora_acordar.strftime('%H:%M')} | 🌙 Dorme às: {hora_dormir.strftime('%H:%M')}
+                - 💼 Bloco de Trabalho: {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')}
+                - 🚗 Bloco de Trânsito: {transito_inicio.strftime('%H:%M')} às {transito_fim.strftime('%H:%M')}
+                - 💪 Bloco de Treino: {treino_inicio.strftime('%H:%M')} às {treino_fim.strftime('%H:%M')}
+                - 📚 Bloco de Estudo: {estudo_inicio.strftime('%H:%M')} às {estudo_fim.strftime('%H:%M')}
+                - ⏱️ Tempo limite para cozinhar no dia inteiro: {tempo_preparo} min.
+                
+                REGRAS DE OURO DA LOGÍSTICA:
+                1. Você NÃO PODE agendar preparos complexos durante os blocos de Trânsito, Treino ou Estudo.
+                2. Use o Bloco de Trânsito ou pré-Treino APENAS para alimentos sinalizados como "Pronto/Rápido: Sim" no estoque (ex: Whey, Frutas, Barras). Especifique na instrução: "Consuma no carro/trânsito".
+                3. Refeições que exigem fogão ou mastigação longa (almoço/jantar) devem estar no tempo LIVRE (antes de sair, pausa do trabalho, ou depois de chegar em casa).
+                
+                DESPENSA DISPONÍVEL (Estrito a isso): {dados_despensa}
+                
                 Retorne EXCLUSIVAMENTE em formato JSON puro. Estrutura:
                 {{
                   "resumo_diario": {{ "calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g" }},
                   "refeicoes": [
-                    {{ "hora": "HH:MM", "nome": "Nome", "ingredientes": "Qtd e Ingrediente", "instrucao_preparo": "Instrução breve", "macros": {{ "calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g" }}, "uso_despensa": [ {{ "nome_exato": "NOME EXATO DA DESPENSA", "qtd_descontada": 150 }} ] }}
+                    {{ "hora": "HH:MM", "nome": "Nome do Prato", "ingredientes": "Qtd e Ingrediente", "instrucao_preparo": "Instrução de preparo E de logística (ex: 'Bata o whey antes de sair e tome durante o engarrafamento')", "macros": {{ "calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g" }}, "uso_despensa": [ {{ "nome_exato": "NOME EXATO", "qtd_descontada": 150 }} ] }}
                   ]
                 }}
                 """
