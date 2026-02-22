@@ -16,7 +16,6 @@ fuso_local = timezone(timedelta(hours=-3))
 ARQUIVO_USUARIOS = "usuarios_db.json"
 
 def hash_senha(senha):
-    """Criptografa a senha para não salvar em texto limpo."""
     return hashlib.sha256(str.encode(senha)).hexdigest()
 
 def carregar_usuarios():
@@ -28,7 +27,7 @@ def carregar_usuarios():
 def criar_conta(username, nome, senha):
     usuarios = carregar_usuarios()
     if username in usuarios:
-        return False # Usuário já existe
+        return False
     usuarios[username] = {"nome": nome, "senha": hash_senha(senha)}
     with open(ARQUIVO_USUARIOS, "w") as f:
         json.dump(usuarios, f)
@@ -47,7 +46,6 @@ def carregar_despensa(username):
     if os.path.exists(arquivo):
         return pd.read_csv(arquivo)
     else:
-        # Despensa inicial padrão para novos usuários
         df = pd.DataFrame({
             "Alimento": ["Ovos", "Goma de Tapioca", "Pão (Francês ou Integral)", "Patinho Moído", "Cenoura", "Peito de Frango", "Aveia em Flocos", "Semente de Chia", "Iogurte Natural", "Maçã"],
             "Quantidade": [12.0, 500.0, 4.0, 500.0, 3.0, 500.0, 300.0, 150.0, 500.0, 6.0],
@@ -89,7 +87,7 @@ def fazer_logout():
         del st.session_state[key]
     st.rerun()
 
-# --- 5. CSS GLOBAL (Oculta menu e estiliza botões) ---
+# --- 5. CSS GLOBAL UX 3.0 ---
 st.markdown(f"""
     <style>
     #MainMenu {{visibility: hidden;}}
@@ -107,7 +105,20 @@ st.markdown(f"""
         padding: 15px !important;
     }}
     
-    /* Estilo dos Botões */
+    /* CORREÇÃO DOS CAMPOS DE TEXTO (Inputs) */
+    div[data-testid="stTextInput"] input, div[data-testid="stNumberInput"] input {{
+        border: 1px solid #D1D1D6 !important;
+        border-radius: 10px !important;
+        padding: 12px 14px !important;
+        background-color: #FAFAFA !important;
+        color: #000 !important;
+    }}
+    div[data-testid="stTextInput"] input:focus, div[data-testid="stNumberInput"] input:focus {{
+        border: 1px solid #007AFF !important;
+        background-color: #FFFFFF !important;
+    }}
+    
+    /* Estilo dos Botões Principais */
     div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{
         border-radius: 20px !important; 
         height: 50px !important;
@@ -123,6 +134,17 @@ st.markdown(f"""
     }}
     div[data-testid="stButton"] button[kind="primary"]:hover {{
         background-color: #0062CC !important;
+        transform: scale(0.98);
+    }}
+    
+    /* BOTÃO DO GOOGLE ESPECÍFICO */
+    .btn-google button {{
+        background-color: #FFFFFF !important;
+        color: #000000 !important;
+        border: 1px solid #D1D1D6 !important;
+    }}
+    .btn-google button:hover {{
+        background-color: #F2F2F7 !important;
         transform: scale(0.98);
     }}
 
@@ -160,46 +182,57 @@ st.markdown(f"""
 # ==========================================
 if not st.session_state.logged_in:
     st.markdown("""
-        <div style="text-align: center; margin-bottom: 30px; margin-top: 20px;">
+        <div style="text-align: center; margin-bottom: 25px; margin-top: 20px;">
             <h1 style="font-size: 4rem; margin-bottom: 0;">🍏</h1>
             <h1 style="font-weight: 800; color: #000;">NutryAi</h1>
             <p style="color: #8E8E93;">Inteligência em cada refeição.</p>
         </div>
     """, unsafe_allow_html=True)
 
-    tab_login, tab_cadastro = st.tabs(["🔐 Entrar", "📝 Criar Conta"])
-
-    with tab_login:
-        with st.container(border=True):
-            login_user = st.text_input("Usuário (Login)", key="log_user").lower()
-            login_senha = st.text_input("Senha", type="password", key="log_pass")
-            if st.button("Acessar Conta", use_container_width=True, type="primary"):
-                if login_user and login_senha:
-                    nome_valido = validar_login(login_user, login_senha)
-                    if nome_valido:
-                        st.session_state.logged_in = True
-                        st.session_state.username = login_user
-                        st.session_state.nome_usuario = nome_valido
-                        st.session_state.despensa = carregar_despensa(login_user) # Carrega só o estoque desse usuário!
-                        st.rerun()
-                    else:
-                        st.error("Usuário ou senha incorretos.")
+    with st.container(border=True):
+        st.markdown("<h4 style='text-align: center; margin-bottom: 15px;'>Acesse sua conta</h4>", unsafe_allow_html=True)
+        
+        login_user = st.text_input("Usuário", placeholder="ex: seu_nome", key="log_user")
+        login_senha = st.text_input("Senha", type="password", placeholder="••••••••", key="log_pass")
+        
+        if st.button("Entrar", use_container_width=True, type="primary"):
+            if login_user and login_senha:
+                nome_valido = validar_login(login_user, login_senha)
+                if nome_valido:
+                    st.session_state.logged_in = True
+                    st.session_state.username = login_user
+                    st.session_state.nome_usuario = nome_valido
+                    st.session_state.despensa = carregar_despensa(login_user)
+                    st.rerun()
                 else:
-                    st.warning("Preencha todos os campos.")
+                    st.error("Usuário ou senha incorretos.")
+            else:
+                st.warning("Preencha todos os campos.")
+                
+        st.markdown("<div style='text-align: center; margin: 15px 0; color: #8E8E93;'>ou</div>", unsafe_allow_html=True)
+        
+        # Botão do Google (Simulador Perfeito para UX 3.0)
+        st.markdown('<div class="btn-google">', unsafe_allow_html=True)
+        if st.button("🌐 Continuar com o Google", use_container_width=True):
+            # SIMULADOR DE LOGIN SOCIAL:
+            st.session_state.logged_in = True
+            st.session_state.username = "usuario_google"
+            st.session_state.nome_usuario = "Visitante (Google)"
+            st.session_state.despensa = carregar_despensa("usuario_google")
+            st.toast("✅ Logado via Google (Modo Simulação)")
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    with tab_cadastro:
-        with st.container(border=True):
-            cad_nome = st.text_input("Como quer ser chamado?")
-            cad_user = st.text_input("Crie um nome de usuário (ex: pablo123)").lower()
-            cad_senha = st.text_input("Crie uma senha forte", type="password")
-            if st.button("Criar Minha Conta", use_container_width=True, type="primary"):
-                if cad_nome and cad_user and cad_senha:
-                    if criar_conta(cad_user, cad_nome, cad_senha):
-                        st.success("Conta criada com sucesso! Volte na aba 'Entrar' para acessar.")
-                    else:
-                        st.error("Esse usuário já existe. Tente outro nome.")
+    with st.expander("Ainda não tem conta? Clique aqui para criar"):
+        cad_nome = st.text_input("Como quer ser chamado?")
+        cad_user = st.text_input("Crie um nome de usuário (ex: pablo123)").lower()
+        cad_senha = st.text_input("Crie uma senha forte", type="password")
+        if st.button("Criar Minha Conta", use_container_width=True):
+            if cad_nome and cad_user and cad_senha:
+                if criar_conta(cad_user, cad_nome, cad_senha):
+                    st.success("Conta criada! Pode fazer o login acima.")
                 else:
-                    st.warning("Preencha todos os campos.")
+                    st.error("Esse usuário já existe. Tente outro nome.")
 
 # ==========================================
 # MÓDULO 2: O APLICATIVO PRINCIPAL (LOGADO)
@@ -278,7 +311,7 @@ else:
                     if novo_nome:
                         novo_item = pd.DataFrame({"Alimento": [novo_nome], "Quantidade": [nova_qtd], "Unidade": [nova_unidade], "Pronto/Rápido": [novo_pronto]})
                         st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
-                        salvar_despensa(st.session_state.despensa, st.session_state.username) # Salva para o usuário logado
+                        salvar_despensa(st.session_state.despensa, st.session_state.username) 
                         st.toast("✅ Item guardado!")
                         st.rerun()
         with col_rem:
