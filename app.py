@@ -6,13 +6,33 @@ import json
 import os
 import re
 import hashlib
+import urllib.parse
+import requests
 from PIL import Image
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (NutryAi) ---
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered") 
 fuso_local = timezone(timedelta(hours=-3))
 
-# --- 2. SISTEMA DE BANCO DE DADOS (USUÁRIOS E ISOLAMENTO) ---
+# --- 2. CONFIGURAÇÕES DO GOOGLE LOGIN (OAUTH) ---
+# Você vai colocar essas chaves no st.secrets depois!
+GOOGLE_CLIENT_ID = st.secrets.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = st.secrets.get("GOOGLE_CLIENT_SECRET", "")
+# Se estiver rodando localmente é http://localhost:8501. No Cloud, será a URL do seu app (ex: https://nutryai.streamlit.app)
+REDIRECT_URI = st.secrets.get("REDIRECT_URI", "http://localhost:8501") 
+
+def gerar_url_google():
+    base_url = "https://accounts.google.com/o/oauth2/v2/auth"
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "response_type": "code",
+        "redirect_uri": REDIRECT_URI,
+        "scope": "openid email profile",
+        "prompt": "select_account"
+    }
+    return f"{base_url}?{urllib.parse.urlencode(params)}"
+
+# --- 3. SISTEMA DE BANCO DE DADOS (USUÁRIOS PADRÃO) ---
 ARQUIVO_USUARIOS = "usuarios_db.json"
 
 def hash_senha(senha):
@@ -26,25 +46,21 @@ def carregar_usuarios():
 
 def criar_conta(username, nome, senha):
     usuarios = carregar_usuarios()
-    if username in usuarios:
-        return False
+    if username in usuarios: return False
     usuarios[username] = {"nome": nome, "senha": hash_senha(senha)}
-    with open(ARQUIVO_USUARIOS, "w") as f:
-        json.dump(usuarios, f)
+    with open(ARQUIVO_USUARIOS, "w") as f: json.dump(usuarios, f)
     return True
 
 def validar_login(username, senha):
     usuarios = carregar_usuarios()
-    if username in usuarios:
-        if usuarios[username]["senha"] == hash_senha(senha):
-            return usuarios[username]["nome"]
+    if username in usuarios and usuarios[username]["senha"] == hash_senha(senha):
+        return usuarios[username]["nome"]
     return None
 
 # Funções de Estoque Isoladas por Usuário
 def carregar_despensa(username):
     arquivo = f"despensa_{username}.csv"
-    if os.path.exists(arquivo):
-        return pd.read_csv(arquivo)
+    if os.path.exists(arquivo): return pd.read_csv(arquivo)
     else:
         df = pd.DataFrame({
             "Alimento": ["Ovos", "Goma de Tapioca", "Pão (Francês ou Integral)", "Patinho Moído", "Cenoura", "Peito de Frango", "Aveia em Flocos", "Semente de Chia", "Iogurte Natural", "Maçã"],
@@ -63,7 +79,7 @@ def extrair_numero(texto):
     numeros = re.findall(r'\d+', str(texto))
     return int(numeros[0]) if numeros else 0
 
-# --- 3. VERIFICAÇÃO DE API ---
+# --- 4. VERIFICAÇÃO DE API GEMINI ---
 api_configurada = False
 if "GEMINI_API_KEY" in st.secrets:
     try:
@@ -72,7 +88,7 @@ if "GEMINI_API_KEY" in st.secrets:
         api_configurada = True
     except Exception as e: pass
 
-# --- 4. INICIALIZAÇÃO DE SESSÃO ---
+# --- 5. INICIALIZAÇÃO DE SESSÃO ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'username' not in st.session_state: st.session_state.username = None
 if 'nome_usuario' not in st.session_state: st.session_state.nome_usuario = None
@@ -83,72 +99,81 @@ if 'consumidos' not in st.session_state: st.session_state.consumidos = set()
 if 'chat_history' not in st.session_state: st.session_state.chat_history = []
 
 def fazer_logout():
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
+    for key in list(st.session_state.keys()): del st.session_state[key]
+    st.query_params.clear() # Limpa parâmetros da URL
     st.rerun()
 
-# --- 5. CSS GLOBAL UX 3.0 ---
+# --- INTERCEPTADOR DO RETORNO DO GOOGLE ---
+if not st.session_state.logged_in and "code" in st.query_params:
+    codigo_autorizacao = st.query_params["code"]
+    try:
+        # Troca o código pelo Token de Acesso
+        token_url = "https://oauth2.googleapis.com/token"
+        token_data = {
+            "code": codigo_autorizacao,
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "redirect_uri": REDIRECT_URI,
+            "grant_type": "authorization_code"
+        }
+        res = requests.post(token_url, data=token_data)
+        
+        if res.status_code == 200:
+            access_token = res.json().get("access_token")
+            # Pega as informações do usuário (Nome e E-mail)
+            user_info_url = "https://www.googleapis.com/oauth2/v2/userinfo"
+            user_res = requests.get(user_info_url, headers={"Authorization": f"Bearer {access_token}"})
+            
+            if user_res.status_code == 200:
+                google_user = user_res.json()
+                st.session_state.logged_in = True
+                st.session_state.username = google_user.get("email") # Usamos o e-mail como ID único
+                st.session_state.nome_usuario = google_user.get("given_name", "Usuário") # Primeiro nome
+                st.session_state.despensa = carregar_despensa(st.session_state.username)
+                st.query_params.clear()
+                st.rerun()
+        else:
+            st.error("Falha na autenticação com o Google.")
+            st.query_params.clear()
+    except Exception as e:
+        st.error(f"Erro no login social: {e}")
+
+# --- 6. CSS GLOBAL UX 3.0 ---
 st.markdown(f"""
     <style>
-    #MainMenu {{visibility: hidden;}}
-    footer {{visibility: hidden;}}
-    header {{visibility: hidden;}}
+    #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
     .block-container {{padding-top: 2rem; padding-bottom: 5rem; max-width: 600px;}}
     .stApp {{ background-color: #F2F2F7 !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Helvetica, Arial, sans-serif !important; }}
     
-    /* Cartões e Telas */
     div[data-testid="stVerticalBlockBorderWrapper"] > div {{
-        background-color: #FFFFFF !important;
-        border-radius: 14px !important;
-        border: none !important;
-        box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.04) !important;
-        padding: 15px !important;
+        background-color: #FFFFFF !important; border-radius: 14px !important; border: none !important; box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.04) !important; padding: 15px !important;
     }}
     
-    /* CORREÇÃO DOS CAMPOS DE TEXTO (Inputs) */
     div[data-testid="stTextInput"] input, div[data-testid="stNumberInput"] input {{
-        border: 1px solid #D1D1D6 !important;
-        border-radius: 10px !important;
-        padding: 12px 14px !important;
-        background-color: #FAFAFA !important;
-        color: #000 !important;
+        border: 1px solid #D1D1D6 !important; border-radius: 10px !important; padding: 12px 14px !important; background-color: #FAFAFA !important; color: #000 !important;
     }}
     div[data-testid="stTextInput"] input:focus, div[data-testid="stNumberInput"] input:focus {{
-        border: 1px solid #007AFF !important;
-        background-color: #FFFFFF !important;
+        border: 1px solid #007AFF !important; background-color: #FFFFFF !important;
     }}
     
-    /* Estilo dos Botões Principais */
     div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{
-        border-radius: 20px !important; 
-        height: 50px !important;
-        font-weight: 600 !important;
-        font-size: 16px !important;
-        border: 1px solid #E5E5EA !important;
-        transition: all 0.2s ease-in-out !important;
+        border-radius: 20px !important; height: 50px !important; font-weight: 600 !important; font-size: 16px !important; border: 1px solid #E5E5EA !important; transition: all 0.2s ease-in-out !important;
     }}
     div[data-testid="stButton"] button[kind="primary"] {{
-        background-color: #007AFF !important; 
-        color: white !important;
-        border: none !important;
+        background-color: #007AFF !important; color: white !important; border: none !important;
     }}
     div[data-testid="stButton"] button[kind="primary"]:hover {{
-        background-color: #0062CC !important;
-        transform: scale(0.98);
+        background-color: #0062CC !important; transform: scale(0.98);
     }}
     
-    /* BOTÃO DO GOOGLE ESPECÍFICO */
-    .btn-google button {{
-        background-color: #FFFFFF !important;
-        color: #000000 !important;
-        border: 1px solid #D1D1D6 !important;
+    /* ESTILO ESPECÍFICO DO LINK BUTTON DO GOOGLE */
+    div[data-testid="stLinkButton"] a {{
+        background-color: #FFFFFF !important; color: #000000 !important; border: 1px solid #D1D1D6 !important; border-radius: 20px !important; height: 50px !important; font-weight: 600 !important; font-size: 16px !important; display: flex; align-items: center; justify-content: center; text-decoration: none !important; transition: all 0.2s ease-in-out !important;
     }}
-    .btn-google button:hover {{
-        background-color: #F2F2F7 !important;
-        transform: scale(0.98);
+    div[data-testid="stLinkButton"] a:hover {{
+        background-color: #F2F2F7 !important; transform: scale(0.98);
     }}
 
-    /* Tabelas e Barras de Progresso */
     table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; }}
     th {{ color: #8E8E93 !important; font-weight: 600 !important; border-bottom: 1px solid #E5E5EA !important; text-align: left !important; padding-bottom: 8px !important; }}
     td, th {{ padding: 12px 8px !important; border-bottom: 1px solid #E5E5EA !important; border-top: none !important; border-left: none !important; border-right: none !important; }}
@@ -156,26 +181,13 @@ st.markdown(f"""
     
     .macro-bar-container {{ width: 100%; background-color: #E5E5EA; border-radius: 8px; height: 10px; margin-top: 4px; overflow: hidden; }}
     .macro-bar-fill {{ height: 100%; border-radius: 8px; transition: width 0.5s ease-in-out; }}
-    .bg-kcal {{ background-color: #FF9500; }}
-    .bg-prot {{ background-color: #34C759; }}
-    .bg-carb {{ background-color: #007AFF; }}
-    .bg-gord {{ background-color: #AF52DE; }}
+    .bg-kcal {{ background-color: #FF9500; }} .bg-prot {{ background-color: #34C759; }} .bg-carb {{ background-color: #007AFF; }} .bg-gord {{ background-color: #AF52DE; }}
 
-    /* Fixar as abas no topo apenas na tela principal */
     .app-tabs > div[data-testid="stTabs"] > div:first-child {{
-        position: -webkit-sticky;
-        position: sticky;
-        top: 0px;
-        z-index: 999;
-        background-color: rgba(242, 242, 247, 0.9);
-        backdrop-filter: blur(10px);
-        padding-top: 10px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid rgba(60, 60, 67, 0.1);
+        position: -webkit-sticky; position: sticky; top: 0px; z-index: 999; background-color: rgba(242, 242, 247, 0.9); backdrop-filter: blur(10px); padding-top: 10px; padding-bottom: 10px; border-bottom: 1px solid rgba(60, 60, 67, 0.1);
     }}
     </style>
     """, unsafe_allow_html=True)
-
 
 # ==========================================
 # MÓDULO 1: TELA DE LOGIN / CADASTRO
@@ -204,24 +216,16 @@ if not st.session_state.logged_in:
                     st.session_state.nome_usuario = nome_valido
                     st.session_state.despensa = carregar_despensa(login_user)
                     st.rerun()
-                else:
-                    st.error("Usuário ou senha incorretos.")
-            else:
-                st.warning("Preencha todos os campos.")
+                else: st.error("Usuário ou senha incorretos.")
+            else: st.warning("Preencha todos os campos.")
                 
         st.markdown("<div style='text-align: center; margin: 15px 0; color: #8E8E93;'>ou</div>", unsafe_allow_html=True)
         
-        # Botão do Google (Simulador Perfeito para UX 3.0)
-        st.markdown('<div class="btn-google">', unsafe_allow_html=True)
-        if st.button("🌐 Continuar com o Google", use_container_width=True):
-            # SIMULADOR DE LOGIN SOCIAL:
-            st.session_state.logged_in = True
-            st.session_state.username = "usuario_google"
-            st.session_state.nome_usuario = "Visitante (Google)"
-            st.session_state.despensa = carregar_despensa("usuario_google")
-            st.toast("✅ Logado via Google (Modo Simulação)")
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        # BOTÃO REAL DO GOOGLE: Ele redireciona para a URL gerada pela nossa função
+        if GOOGLE_CLIENT_ID:
+            st.link_button("🌐 Continuar com o Google", gerar_url_google(), use_container_width=True)
+        else:
+            st.warning("⚠️ Chaves do Google não configuradas nos Secrets.")
 
     with st.expander("Ainda não tem conta? Clique aqui para criar"):
         cad_nome = st.text_input("Como quer ser chamado?")
@@ -229,28 +233,17 @@ if not st.session_state.logged_in:
         cad_senha = st.text_input("Crie uma senha forte", type="password")
         if st.button("Criar Minha Conta", use_container_width=True):
             if cad_nome and cad_user and cad_senha:
-                if criar_conta(cad_user, cad_nome, cad_senha):
-                    st.success("Conta criada! Pode fazer o login acima.")
-                else:
-                    st.error("Esse usuário já existe. Tente outro nome.")
+                if criar_conta(cad_user, cad_nome, cad_senha): st.success("Conta criada! Pode fazer o login acima.")
+                else: st.error("Esse usuário já existe. Tente outro nome.")
 
 # ==========================================
 # MÓDULO 2: O APLICATIVO PRINCIPAL (LOGADO)
 # ==========================================
 else:
     hora_atual = datetime.now(fuso_local).hour
-    if hora_atual < 12:
-        saudacao = "Bom dia"
-        icone_tempo = "☀️"
-        msg_contexto = "Pronto para dominar sua insulina hoje?"
-    elif hora_atual < 18:
-        saudacao = "Boa tarde"
-        icone_tempo = "☕"
-        msg_contexto = "Mantendo o foco na sua rotina à tarde!"
-    else:
-        saudacao = "Boa noite"
-        icone_tempo = "🌙"
-        msg_contexto = "Quase lá, foco na reta final do seu dia."
+    if hora_atual < 12: saudacao, icone_tempo, msg_contexto = "Bom dia", "☀️", "Pronto para dominar sua insulina hoje?"
+    elif hora_atual < 18: saudacao, icone_tempo, msg_contexto = "Boa tarde", "☕", "Mantendo o foco na sua rotina à tarde!"
+    else: saudacao, icone_tempo, msg_contexto = "Boa noite", "🌙", "Quase lá, foco na reta final do seu dia."
 
     col_title, col_logout = st.columns([4, 1], vertical_alignment="center")
     with col_title:
@@ -263,12 +256,10 @@ else:
     with col_logout:
         if st.button("Sair"): fazer_logout()
 
-    # Adicionando uma classe wrapper para fixar as abas via CSS
     st.markdown('<div class="app-tabs">', unsafe_allow_html=True)
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["🕒 Agenda", "📦 Estoque", "🍽️ Seu Dia", "👩‍⚕️ Plano Ideal", "💬 Chat"])
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- ABA 1: ROTINA EM BLOCOS DE TEMPO ---
     with tab1:
         with st.container(border=True):
             st.subheader("Blocos Ocupados")
@@ -289,14 +280,12 @@ else:
             estudo_fim = c10.time_input("📝 Estudo Fim", time(22, 0), key="est_f")
             st.divider()
             tempo_preparo = st.slider("⏱️ Tempo para cozinhar (min/dia)", 0, 120, 30)
-            
             if st.button("Salvar Horários", use_container_width=True, type="primary"):
                 st.session_state.cardapio_atual = None
                 st.session_state.cardapio_ideal = None 
                 st.session_state.consumidos = set()
                 st.success("✅ Ajustes salvos no sistema.")
 
-    # --- ABA 2: ESTOQUE & COMPRAS ---
     with tab2:
         st.markdown("### 🛒 Seu Estoque")
         col_add, col_rem = st.columns(2)
@@ -330,19 +319,16 @@ else:
         df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
         df_visual.set_index("Alimento", inplace=True)
         st.table(df_visual[["Disponível", "Pronto/Rápido"]])
-        
         st.divider()
         st.markdown("### 📝 Lista do Mercado")
         estoque_zerado = st.session_state.despensa[st.session_state.despensa["Quantidade"] <= 0]
-        if estoque_zerado.empty:
-            st.info("Tudo abastecido por enquanto.")
+        if estoque_zerado.empty: st.info("Tudo abastecido por enquanto.")
         else:
             st.warning("Atenção! Repor:")
             for index, row in estoque_zerado.iterrows(): st.write(f"- {row['Alimento']}")
         anotacoes = st.text_area("O que mais precisa trazer?", height=80, placeholder="Ex: Adoçante, café...")
         if st.button("Salvar Anotações", use_container_width=True): st.toast("✅ Anotações salvas!")
 
-    # --- ABA 3: SEU DIA (GERADOR + AO VIVO) ---
     with tab3:
         if st.session_state.cardapio_atual is None:
             st.markdown("""
@@ -352,10 +338,8 @@ else:
                 <p style='color: #8E8E93; font-size: 0.95rem; margin-bottom: 25px;'>Vamos criar um plano de ataque inteligente usando apenas o que tem na geladeira hoje.</p>
             </div>
             """, unsafe_allow_html=True)
-            
         if st.button("⚡ Gerar Cardápio de Hoje", use_container_width=True, type="primary"):
-            if not api_configurada:
-                st.error("⚠️ Configure a chave de API.")
+            if not api_configurada: st.error("⚠️ Configure a chave de API.")
             else:
                 with st.spinner("Mapeando seu dia e criando a logística..."):
                     despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
@@ -373,19 +357,16 @@ else:
                         st.session_state.consumidos = set()
                         st.balloons() 
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"🚨 Erro na IA: {e}")
+                    except Exception as e: st.error(f"🚨 Erro na IA: {e}")
 
         if st.session_state.cardapio_atual is not None:
             hora_agora = datetime.now(fuso_local).strftime("%H:%M")
             resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
             refeicoes = st.session_state.cardapio_atual.get("refeicoes", [])
-            
             tot_kcal = extrair_numero(resumo.get('calorias_totais', 0))
             tot_prot = extrair_numero(resumo.get('proteinas_totais', 0))
             tot_carb = extrair_numero(resumo.get('carbos_totais', 0))
             tot_gord = extrair_numero(resumo.get('gorduras_totais', 0))
-            
             cons_kcal = cons_prot = cons_carb = cons_gord = 0
             for i, ref in enumerate(refeicoes):
                 if f"ref_{i}" in st.session_state.consumidos:
@@ -393,7 +374,6 @@ else:
                     cons_prot += extrair_numero(ref.get('macros', {}).get('proteinas', 0))
                     cons_carb += extrair_numero(ref.get('macros', {}).get('carbos', 0))
                     cons_gord += extrair_numero(ref.get('macros', {}).get('gorduras', 0))
-                    
             pct_kcal = min(100, int((cons_kcal / tot_kcal * 100) if tot_kcal > 0 else 0))
             pct_prot = min(100, int((cons_prot / tot_prot * 100) if tot_prot > 0 else 0))
             pct_carb = min(100, int((cons_carb / tot_carb * 100) if tot_carb > 0 else 0))
@@ -433,35 +413,31 @@ else:
                 if i < len(refeicoes) - 1:
                     st.markdown("<div style='width: 3px; height: 25px; background-color: #E5E5EA; margin-left: 30px; margin-top: -15px; margin-bottom: -15px; border-radius: 2px; z-index: 1; position: relative;'></div>", unsafe_allow_html=True)
 
-    # --- ABA 4: PLANO IDEAL (METAS FLEXÍVEIS) ---
     with tab4:
         if st.session_state.cardapio_ideal is None:
             st.markdown("""
             <div style='text-align: center; padding: 30px 20px; background-color: #FFFFFF; border-radius: 14px; box-shadow: 0px 2px 10px rgba(0,0,0,0.04); margin-bottom: 20px; margin-top: 10px;'>
                 <h1 style='font-size: 3.5rem; margin-bottom: 5px;'>👩‍⚕️</h1>
                 <h3 style='color: #000000; font-weight: 700; margin-bottom: 5px;'>Plano Padrão Ouro</h3>
-                <p style='color: #8E8E93; font-size: 0.95rem; margin-bottom: 25px;'>A Nutri vai criar seu plano perfeito (ignorando o estoque) para você usar no mercado.</p>
+                <p style='color: #8E8E93; font-size: 0.95rem; margin-bottom: 25px;'>A Nutri vai criar seu plano perfeito (ignorando o estoque) para usar no mercado.</p>
             </div>
             """, unsafe_allow_html=True)
-            
         if st.button("✨ Descobrir Meu Plano Ideal", use_container_width=True, type="primary"):
-            if not api_configurada:
-                st.error("⚠️ Configure a chave de API.")
+            if not api_configurada: st.error("⚠️ Configure a chave de API.")
             else:
                 with st.spinner("Calculando mapa nutricional..."):
                     prompt_ideal = f"""
-                    Nutricionista especialista em RI e Dieta Flexível. Crie um PLANO DE METAS (Macros) e GUIA DE ESTRUTURAÇÃO DE PRATOS. IGNORAR ESTOQUE.
+                    Nutricionista especialista em RI e Dieta Flexível. Crie um PLANO DE METAS e GUIA DE ESTRUTURAÇÃO DE PRATOS. IGNORAR ESTOQUE.
                     REGRAS: Carbo Complexo SEMPRE com Proteína/Gordura Boa. Nenhuma salada matinal.
                     AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Tempo cozinhar: {tempo_preparo} min.
-                    Retorne JSON: {{"metas_diarias": {{"calorias": "2000 kcal", "carboidratos": "150g", "proteinas": "140g", "gorduras": "60g", "fibras": "30g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "alvo_macros": "Carbos: 30g | Prot: 25g", "estrutura_prato": "Regra de porções", "sugestoes_flexiveis": "3 opções práticas", "instrucao_clinica": "Explicação clínica"}}]}}
+                    Retorne JSON: {{"metas_diarias": {{"calorias": "2000 kcal", "carboidratos": "150g", "proteinas": "140g", "gorduras": "60g", "fibras": "30g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "alvo_macros": "Carbos: 30g | Prot: 25g", "estrutura_prato": "Regra de porções", "sugestoes_flexiveis": "3 opções", "instrucao_clinica": "Explicação clínica"}}]}}
                     """
                     try:
                         resposta_ideal = modelo.generate_content(prompt_ideal)
                         texto_limpo_ideal = re.search(r'\{.*\}', resposta_ideal.text.strip(), re.DOTALL).group(0) if re.search(r'\{.*\}', resposta_ideal.text.strip(), re.DOTALL) else resposta_ideal.text.strip()
                         st.session_state.cardapio_ideal = json.loads(texto_limpo_ideal)
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"🚨 Erro: {e}")
+                    except Exception as e: st.error(f"🚨 Erro: {e}")
                         
         if st.session_state.cardapio_ideal:
             metas = st.session_state.cardapio_ideal.get("metas_diarias", {})
@@ -480,7 +456,6 @@ else:
                     st.markdown(f"**💡 Opções:** {ref_ideal.get('sugestoes_flexiveis', '')}")
                     st.info(f"👩‍⚕️ **Clínica:** {ref_ideal.get('instrucao_clinica', '')}")
 
-    # --- ABA 5: CHAT COM A NUTRICIONISTA ---
     with tab5:
         st.markdown("### 💬 Chat com a Nutri")
         st.write("Dúvidas no restaurante a quilo? Envie a foto!")
@@ -489,8 +464,7 @@ else:
             with st.chat_message(msg["role"]): st.markdown(msg["content"])
         prompt_chat = st.chat_input("Mensagem...")
         if prompt_chat:
-            if not api_configurada:
-                st.error("⚠️ Configure a API.")
+            if not api_configurada: st.error("⚠️ Configure a API.")
             else:
                 st.session_state.chat_history.append({"role": "user", "content": prompt_chat})
                 with st.chat_message("user"):
@@ -499,7 +473,7 @@ else:
                 with st.chat_message("assistant"):
                     with st.spinner("A Nutri está digitando..."):
                         try:
-                            conteudo_ia = ["Você é a NutryAi, Nutricionista Clínica especialista em Resistência à Insulina e Dieta Flexível. Seja prestativa, use tom amigável. Avalie impactos na insulina se o paciente perguntar sobre alimentos ou fotos.", prompt_chat]
+                            conteudo_ia = ["Você é a NutryAi, Nutricionista Clínica especialista em Resistência à Insulina. Seja prestativa, use tom amigável. Avalie impactos na insulina se o paciente perguntar sobre alimentos ou fotos.", prompt_chat]
                             if foto_upload:
                                 imagem_pil = Image.open(foto_upload)
                                 conteudo_ia.append(imagem_pil)
