@@ -8,6 +8,8 @@ import re
 import hashlib
 import urllib.parse
 import requests
+import base64
+from io import BytesIO
 from PIL import Image
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (NutryAi) ---
@@ -30,6 +32,16 @@ def gerar_url_google():
     }
     return f"{base_url}?{urllib.parse.urlencode(params)}"
 
+# SVG Oficial do Google para o Botão
+GOOGLE_SVG = """
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="width:20px;height:20px;margin-right:10px;">
+<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+</svg>
+"""
+
 # --- 3. SISTEMA DE BANCO DE DADOS (USUÁRIOS E PERFIL) ---
 ARQUIVO_USUARIOS = "usuarios_db.json"
 
@@ -46,11 +58,10 @@ def criar_conta(username, nome, senha):
     usuarios = carregar_usuarios()
     if username in usuarios: return False
     
-    # Cria conta já com um perfil padrão
     usuarios[username] = {
         "nome": nome, 
         "senha": hash_senha(senha),
-        "perfil": {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento Saudável", "atividade": "Moderadamente Ativo"}
+        "perfil": {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento Saudável", "atividade": "Moderadamente Ativo", "foto": None}
     }
     with open(ARQUIVO_USUARIOS, "w") as f: json.dump(usuarios, f)
     return True
@@ -61,9 +72,10 @@ def validar_login(username, senha):
         return usuarios[username] 
     return None
 
-def salvar_perfil(username, perfil_data):
+def salvar_perfil(username, nome_atualizado, perfil_data):
     usuarios = carregar_usuarios()
     if username in usuarios:
+        usuarios[username]["nome"] = nome_atualizado
         usuarios[username]["perfil"] = perfil_data
         with open(ARQUIVO_USUARIOS, "w") as f: json.dump(usuarios, f)
 
@@ -144,10 +156,9 @@ if not st.session_state.logged_in and "code" in st.query_params:
     except Exception as e:
         st.error(f"Erro no login social: {e}")
 
-# --- 6. CSS GLOBAL UX 3.0 ---
+# --- 6. CSS GLOBAL UX 3.5 ---
 st.markdown(f"""
     <style>
-    /* Ocultando Sidebar Nativa e Headers desnecessários */
     [data-testid="stSidebar"] {{ display: none !important; }}
     [data-testid="collapsedControl"] {{ display: none !important; }}
     #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
@@ -169,6 +180,16 @@ st.markdown(f"""
         background-color: #007AFF !important; color: white !important; border: none !important;
     }}
     
+    /* BOTÃO DO GOOGLE (HTML NATIVO) */
+    .btn-google-nativo {{
+        display: flex; align-items: center; justify-content: center;
+        background-color: #FFFFFF; color: #000000; border: 1px solid #D1D1D6;
+        border-radius: 20px; height: 50px; font-weight: 600; font-size: 16px;
+        text-decoration: none; width: 100%; transition: all 0.2s ease-in-out;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }}
+    .btn-google-nativo:hover {{ background-color: #F8F8F8; transform: scale(0.98); }}
+
     table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; }}
     th {{ color: #8E8E93 !important; font-weight: 600 !important; border-bottom: 1px solid #E5E5EA !important; text-align: left !important; padding-bottom: 8px !important; }}
     td, th {{ padding: 12px 8px !important; border-bottom: 1px solid #E5E5EA !important; border-top: none !important; border-left: none !important; border-right: none !important; }}
@@ -192,7 +213,7 @@ if not st.session_state.logged_in:
         <div style="text-align: center; margin-bottom: 25px; margin-top: 20px;">
             <h1 style="font-size: 4rem; margin-bottom: 0;">🍏</h1>
             <h1 style="font-weight: 800; color: #000;">NutryAi</h1>
-            <p style="color: #8E8E93;">Sua inteligência nutricional.</p>
+            <p style="color: #8E8E93;">Inteligência em cada refeição.</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -216,10 +237,12 @@ if not st.session_state.logged_in:
                 
         st.markdown("<div style='text-align: center; margin: 15px 0; color: #8E8E93;'>ou</div>", unsafe_allow_html=True)
         
+        # BOTÃO DO GOOGLE OFICIAL (SVG)
         if GOOGLE_CLIENT_ID:
-            st.link_button("🌐 Continuar com o Google", gerar_url_google(), use_container_width=True)
+            st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_self">{GOOGLE_SVG} Continuar com o Google</a>', unsafe_allow_html=True)
         else:
-            if st.button("🌐 Continuar com o Google (Simulador)"):
+            st.markdown(f'<a href="#" class="btn-google-nativo" target="_self" title="Requer configuração no Google Cloud">{GOOGLE_SVG} Continuar com o Google (Desativado)</a>', unsafe_allow_html=True)
+            if st.button("🔌 Simular Login Rápido (Teste)"):
                 st.session_state.logged_in = True
                 st.session_state.username = "usuario_google"
                 st.session_state.nome_usuario = "Visitante"
@@ -249,47 +272,71 @@ else:
     elif hora_atual < 18: saudacao, icone_tempo = "Boa tarde", "☕"
     else: saudacao, icone_tempo = "Boa noite", "🌙"
 
-    # --- O NOVO HEADER COM PERFIL À DIREITA ---
-    col_title, col_profile = st.columns([3.5, 1.5], vertical_alignment="center")
+    # --- O NOVO HEADER (TÍTULO CENTRALIZADO E PERFIL À DIREITA) ---
+    col_empty, col_title, col_profile = st.columns([1, 2.5, 1], vertical_alignment="center")
+    
     with col_title:
         st.markdown(f"""
-            <div style="padding-bottom: 5px; padding-top: 5px;">
+            <div style="text-align: center; padding-top: 5px;">
                 <h1 style="color: #000; font-weight: 800; font-size: 2rem; margin-bottom: 0;">NutryAi 🍏</h1>
-                <p style="color: #8E8E93; font-size: 0.95rem; margin-top: -5px;"><b>{saudacao}, {st.session_state.nome_usuario}! {icone_tempo}</b></p>
+                <p style="color: #8E8E93; font-size: 0.9rem; margin-top: -5px;">{saudacao}, {st.session_state.nome_usuario}!</p>
             </div>
         """, unsafe_allow_html=True)
         
     with col_profile:
-        # A GAVETA RETRÁTIL DE PERFIL (No lugar da Sidebar)
+        # GAVETA RETRÁTIL COM SUB-ABAS E FOTO
         with st.popover("⚙️ Perfil", use_container_width=True):
-            st.markdown("#### 👤 Biometria")
+            tab_dados, tab_bio = st.tabs(["👤 Dados", "⚖️ Biometria"])
+            
             p_idade = st.session_state.perfil.get("idade", 30)
             p_peso = st.session_state.perfil.get("peso", 70.0)
             p_altura = st.session_state.perfil.get("altura", 170)
             p_obj = st.session_state.perfil.get("objetivo", "Emagrecimento Saudável")
             p_atv = st.session_state.perfil.get("atividade", "Moderadamente Ativo")
+            foto_salva = st.session_state.perfil.get("foto", None)
             
-            nova_idade = st.number_input("Idade", min_value=10, max_value=120, value=p_idade)
-            novo_peso = st.number_input("Peso (kg)", min_value=30.0, max_value=250.0, value=float(p_peso), step=0.5)
-            nova_altura = st.number_input("Altura (cm)", min_value=100, max_value=230, value=int(p_altura))
+            with tab_dados:
+                st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+                if foto_salva:
+                    st.markdown(f'<img src="data:image/jpeg;base64,{foto_salva}" width="100" height="100" style="border-radius:50%; object-fit:cover; margin-bottom:10px; border: 2px solid #E5E5EA;">', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div style="font-size: 60px; margin-bottom: 10px;">👤</div>', unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+                
+                nova_foto = st.file_uploader("Trocar foto", type=["jpg", "png", "jpeg"])
+                novo_nome = st.text_input("Seu Nome", value=st.session_state.nome_usuario)
+                nova_idade = st.number_input("Idade", min_value=10, max_value=120, value=p_idade)
+
+            with tab_bio:
+                novo_peso = st.number_input("Peso (kg)", min_value=30.0, max_value=250.0, value=float(p_peso), step=0.5)
+                nova_altura = st.number_input("Altura (cm)", min_value=100, max_value=230, value=int(p_altura))
+                
+                objetivos = ["Emagrecimento Saudável", "Hipertrofia (Massa)", "Manutenção", "Controle Glicêmico"]
+                novo_obj = st.selectbox("Objetivo", objetivos, index=objetivos.index(p_obj) if p_obj in objetivos else 0)
+                
+                atividades = ["Sedentário", "Levemente Ativo", "Moderadamente Ativo", "Muito Ativo"]
+                nova_atv = st.selectbox("Atividade", atividades, index=atividades.index(p_atv) if p_atv in atividades else 1)
             
-            objetivos = ["Emagrecimento Saudável", "Hipertrofia (Ganho de Massa)", "Manutenção", "Controle Glicêmico Restrito"]
-            novo_obj = st.selectbox("Objetivo", objetivos, index=objetivos.index(p_obj) if p_obj in objetivos else 0)
-            
-            atividades = ["Sedentário", "Levemente Ativo", "Moderadamente Ativo", "Muito Ativo"]
-            nova_atv = st.selectbox("Atividade", atividades, index=atividades.index(p_atv) if p_atv in atividades else 1)
-            
-            if st.button("💾 Salvar Dados", type="primary", use_container_width=True):
-                novo_perfil = {"idade": nova_idade, "peso": novo_peso, "altura": nova_altura, "objetivo": novo_obj, "atividade": nova_atv}
+            if st.button("💾 Salvar Perfil", type="primary", use_container_width=True):
+                # Processamento da imagem para Base64
+                if nova_foto is not None:
+                    img = Image.open(nova_foto)
+                    img.thumbnail((200, 200)) # Corta a imagem pra não pesar o banco
+                    buffered = BytesIO()
+                    img.convert('RGB').save(buffered, format="JPEG")
+                    foto_salva = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                
+                novo_perfil = {"idade": nova_idade, "peso": novo_peso, "altura": nova_altura, "objetivo": novo_obj, "atividade": nova_atv, "foto": foto_salva}
                 st.session_state.perfil = novo_perfil
-                salvar_perfil(st.session_state.username, novo_perfil)
-                st.rerun() # Atualiza e fecha a gaveta na hora
+                st.session_state.nome_usuario = novo_nome
+                salvar_perfil(st.session_state.username, novo_nome, novo_perfil)
+                st.rerun() 
             
             st.divider()
-            if st.button("🚪 Sair (Logout)", use_container_width=True):
+            if st.button("🚪 Sair da Conta", use_container_width=True):
                 fazer_logout()
 
-    dados_perfil_ia = f"Paciente de {st.session_state.perfil.get('idade', 30)} anos, {st.session_state.perfil.get('peso', 70)}kg, {st.session_state.perfil.get('altura', 170)}cm. Objetivo Clínico: {st.session_state.perfil.get('objetivo', 'Emagrecimento')}. Nível de Atividade: {st.session_state.perfil.get('atividade', 'Moderada')}."
+    dados_perfil_ia = f"Paciente de {st.session_state.perfil.get('idade', 30)} anos, {st.session_state.perfil.get('peso', 70)}kg, {st.session_state.perfil.get('altura', 170)}cm. Objetivo: {st.session_state.perfil.get('objetivo', 'Emagrecimento')}. Atividade: {st.session_state.perfil.get('atividade', 'Moderada')}."
 
     st.markdown('<div class="app-tabs">', unsafe_allow_html=True)
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["🕒 Agenda", "📦 Estoque", "🍽️ Seu Dia", "👩‍⚕️ Plano Ideal", "💬 Chat"])
@@ -380,8 +427,8 @@ else:
                 with st.spinner("Analisando sua biometria e calculando..."):
                     despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
                     prompt = f"""
-                    Nutricionista Clínico especialista em Resistência à Insulina (RI). Crie o cardápio real de hoje usando APENAS O ESTOQUE.
-                    BIOMETRIA DO PACIENTE: {dados_perfil_ia}
+                    Nutricionista Clínico especialista em RI. Crie o cardápio real de hoje usando APENAS O ESTOQUE.
+                    BIOMETRIA: {dados_perfil_ia}
                     REGRA: NUNCA sugira carboidratos "solteiros". NUNCA sugira salada verde de manhã. Use aveia/chia/fruta matinal.
                     AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Prep. Máx: {tempo_preparo} min.
                     ESTOQUE: {despensa_ativa.to_dict(orient="records")}
@@ -465,8 +512,8 @@ else:
             else:
                 with st.spinner("Calculando o mapa nutricional para o seu biotipo..."):
                     prompt_ideal = f"""
-                    Nutricionista especialista em RI e Dieta Flexível. Crie um PLANO DE METAS e GUIA DE ESTRUTURAÇÃO DE PRATOS. IGNORAR ESTOQUE.
-                    BIOMETRIA DO PACIENTE: {dados_perfil_ia}
+                    Nutricionista especialista em RI. Crie um PLANO DE METAS e GUIA DE ESTRUTURAÇÃO DE PRATOS. IGNORAR ESTOQUE.
+                    BIOMETRIA: {dados_perfil_ia}
                     REGRAS: Carbo Complexo SEMPRE com Proteína/Gordura Boa. Nenhuma salada matinal.
                     AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Tempo cozinhar: {tempo_preparo} min.
                     Retorne JSON: {{"metas_diarias": {{"calorias": "2000 kcal", "carboidratos": "150g", "proteinas": "140g", "gorduras": "60g", "fibras": "30g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "alvo_macros": "Carbos: 30g | Prot: 25g", "estrutura_prato": "Regra de porções", "sugestoes_flexiveis": "3 opções", "instrucao_clinica": "Explicação clínica"}}]}}
