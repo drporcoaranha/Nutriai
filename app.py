@@ -10,15 +10,34 @@ from PIL import Image
 # --- 1. CONFIGURAÇÃO DA PÁGINA (NutryAi) ---
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered") 
 
-# Injetando CSS para esconder menu nativo e deixar as Abas Fixas (Sticky) no topo
+# Injetando CSS SUPER CUSTOMIZADO (Estilo WhatsApp / iOS)
 st.markdown("""
     <style>
+    /* Esconder menu nativo */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .block-container {padding-top: 1rem; padding-bottom: 5rem;}
     
-    /* Mágica de UX: Mantém as abas sempre visíveis no topo ao rolar a tela */
+    /* 1. Título Centralizado e Estilizado */
+    .app-header {
+        text-align: center;
+        padding-bottom: 10px;
+    }
+    .app-header h1 {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        color: #128C7E; /* Verde escuro Zap */
+        font-weight: 800;
+        font-size: 2.5rem;
+        margin-bottom: 0px;
+    }
+    .app-header p {
+        color: #667781;
+        font-size: 0.95rem;
+        margin-top: -10px;
+    }
+
+    /* 2. Abas Fixas (Sticky Tabs) */
     div[data-testid="stTabs"] > div:first-child {
         position: -webkit-sticky;
         position: sticky;
@@ -29,11 +48,48 @@ st.markdown("""
         padding-bottom: 10px;
         border-bottom: 1px solid rgba(128,128,128,0.2);
     }
-    </style>
-    """, unsafe_allow_html=True)
+    
+    /* 3. Botões "Fat" Arredondados (Estilo WhatsApp) */
+    div[data-testid="stButton"] button {
+        border-radius: 24px !important; /* Bordas bem redondas */
+        height: 54px !important; /* Mais gordinho, ideal para o dedo no celular */
+        font-weight: 700 !important;
+        font-size: 16px !important;
+        border: none !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+    
+    /* Cor do Botão Primário (Verde WhatsApp) */
+    div[data-testid="stButton"] button[kind="primary"] {
+        background-color: #25D366 !important; 
+        color: white !important;
+    }
+    div[data-testid="stButton"] button[kind="primary"]:hover {
+        background-color: #128C7E !important;
+        transform: scale(1.02);
+    }
 
-st.title("🍏 NutryAi")
-st.caption("Seu assistente de nutrição flexível e controle glicêmico.")
+    /* 4. Estilizar os balões do Chat para ficarem mais suaves */
+    div[data-testid="stChatMessage"] {
+        border-radius: 18px !important;
+        padding: 10px 15px !important;
+        background-color: rgba(37, 211, 102, 0.05) !important; /* Fundo esverdeado bem clarinho */
+        border: 1px solid rgba(37, 211, 102, 0.1) !important;
+    }
+    
+    /* Ocultar elementos desnecessários de UI nos checkboxes */
+    div[data-testid="stCheckbox"] label span {
+        font-size: 1.1rem !important;
+        font-weight: bold;
+    }
+    </style>
+    
+    <div class="app-header">
+        <h1>🍏 NutryAi</h1>
+        <p>Seu assistente flexível de nutrição inteligente</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # --- 2. LÓGICA DE MEMÓRIA E ARQUIVOS ---
 ARQUIVO_DESPENSA = "despensa_inteligente_ri.csv" 
@@ -83,7 +139,7 @@ if 'consumidos' not in st.session_state:
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 
-# --- 5. INTERFACE VISUAL (ABAS CONSOLIDADAS E OTIMIZADAS PARA UX) ---
+# --- 5. INTERFACE VISUAL (ABAS) ---
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["🕒 Agenda", "📦 Estoque & Compras", "🍽️ Seu Dia", "👩‍⚕️ Plano Ideal", "💬 Chat"])
 
 # --- ABA 1: ROTINA EM BLOCOS DE TEMPO ---
@@ -112,40 +168,40 @@ with tab1:
         estudo_fim = c10.time_input("📝 Estudo Fim", time(22, 0), key="est_f")
         
         st.divider()
-        tempo_preparo = st.slider("⏱️ Tempo livre diário para cozinhar (minutos)", 0, 120, 30)
+        tempo_preparo = st.slider("⏱️ Tempo livre para cozinhar (minutos/dia)", 0, 120, 30)
         
-        if st.button("💾 Salvar Agenda", use_container_width=True, type="primary"):
+        if st.button("💾 Salvar Horários", use_container_width=True, type="primary"):
             st.session_state.cardapio_atual = None
             st.session_state.cardapio_ideal = None 
             st.session_state.consumidos = set()
-            st.success("Agenda salva! A IA agora conhece seus horários.")
+            st.success("✅ Agenda salva! A IA já ajustou seu relógio interno.")
 
-# --- ABA 2: ESTOQUE & COMPRAS (JUNTOS PARA MELHOR UX) ---
+# --- ABA 2: ESTOQUE & COMPRAS ---
 with tab2:
-    st.markdown("### 🛒 Gerenciar Estoque")
+    st.markdown("### 🛒 Seu Estoque Atual")
     col_add, col_rem = st.columns(2)
     with col_add:
-        with st.popover("➕ Adicionar Alimento", use_container_width=True):
-            novo_nome = st.text_input("Nome")
+        with st.popover("➕ Adicionar", use_container_width=True):
+            novo_nome = st.text_input("Nome do Alimento")
             nova_qtd = st.number_input("Qtd", min_value=0.0, step=1.0)
             nova_unidade = st.selectbox("Medida", ["g", "kg", "ml", "L", "un", "dose", "colher"])
-            novo_pronto = st.radio("Preparo Rápido?", ["Não", "Sim"], horizontal=True)
-            if st.button("Salvar Item"):
+            novo_pronto = st.radio("Preparo Rápido/Lanche?", ["Não", "Sim"], horizontal=True)
+            if st.button("Salvar Item", type="primary"):
                 if novo_nome:
                     novo_item = pd.DataFrame({"Alimento": [novo_nome], "Quantidade": [nova_qtd], "Unidade": [nova_unidade], "Pronto/Rápido": [novo_pronto]})
                     st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
                     salvar_despensa(st.session_state.despensa)
-                    st.toast("✅ Item adicionado ao estoque!")
+                    st.toast("✅ Item guardado na despensa!")
                     st.rerun()
     
     with col_rem:
-        with st.popover("🗑️ Remover Alimento", use_container_width=True):
+        with st.popover("🗑️ Remover", use_container_width=True):
             lista_alimentos = st.session_state.despensa["Alimento"].tolist()
-            item_remover = st.selectbox("Apagar:", lista_alimentos)
+            item_remover = st.selectbox("Qual item acabou?", lista_alimentos)
             if st.button("Excluir Item"):
                 st.session_state.despensa = st.session_state.despensa[st.session_state.despensa["Alimento"] != item_remover]
                 salvar_despensa(st.session_state.despensa)
-                st.toast("🗑️ Item removido!")
+                st.toast("🗑️ Item removido com sucesso!")
                 st.rerun()
 
     df_visual = st.session_state.despensa.copy()
@@ -155,28 +211,28 @@ with tab2:
     st.dataframe(df_visual[["Alimento", "Disponível", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
 
     st.divider()
-    st.markdown("### 📝 Lista de Compras")
+    st.markdown("### 📝 Lista do Mercado")
     
     estoque_zerado = st.session_state.despensa[st.session_state.despensa["Quantidade"] <= 0]
     if estoque_zerado.empty:
-        st.info("Tudo certo por aqui! Seu estoque está abastecido.")
+        st.info("Tudo certo! Nenhuma urgência de mercado por enquanto.")
     else:
-        st.warning("⚠️ Itens esgotados que precisam de reposição:")
+        st.warning("⚠️ Atenção! Você precisa repor:")
         for index, row in estoque_zerado.iterrows():
             st.write(f"- {row['Alimento']}")
             
-    anotacoes = st.text_area("Bloco de Notas do Mercado (O que mais comprar?)", height=100)
-    if st.button("Salvar Anotações Temporárias", use_container_width=True): 
-        st.toast("✅ Anotações salvas na tela atual!")
+    anotacoes = st.text_area("O que mais precisa trazer da rua?", height=80, placeholder="Ex: Papel toalha, adoçante, café...")
+    if st.button("Salvar Anotações", use_container_width=True): 
+        st.toast("✅ Anotações salvas no bloco de notas!")
 
-# --- ABA 3: SEU DIA (GERADOR + AO VIVO JUNTOS) ---
+# --- ABA 3: SEU DIA (GERADOR + AO VIVO) ---
 with tab3:
-    st.markdown("### 🍽️ Plano Tático de Hoje")
-    st.write("A IA vai mapear seu estoque e encaixar as refeições na sua agenda atual.")
+    st.markdown("### 🍽️ Tática de Guerra para Hoje")
+    st.write("Crie seu plano de ataque usando **apenas** o que tem na geladeira e no armário.")
     
     if st.button("⚡ Gerar Cardápio de Hoje", use_container_width=True, type="primary"):
         if not api_configurada:
-            st.error("Configure sua chave de API nos secrets.")
+            st.error("⚠️ Ops! Configure sua chave de API nos secrets primeiro.")
         else:
             with st.spinner("Analisando estoque e calculando seu dia..."):
                 despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
@@ -194,18 +250,17 @@ with tab3:
                     texto_limpo = re.search(r'\{.*\}', resposta.text.strip(), re.DOTALL).group(0) if re.search(r'\{.*\}', resposta.text.strip(), re.DOTALL) else resposta.text.strip()
                     st.session_state.cardapio_atual = json.loads(texto_limpo)
                     st.session_state.consumidos = set()
-                    st.balloons() # Celebração de sucesso
-                    st.toast("✅ Cardápio gerado com sucesso! Veja o painel abaixo.")
+                    st.balloons() 
+                    st.toast("✅ Cardápio tático montado! Veja a lista abaixo.")
                 except Exception as e:
-                    st.error(f"🚨 Erro na IA: {e}")
+                    st.error(f"🚨 Houve um pequeno tropeço na IA: {e}")
 
-    # Renderiza o "Ao Vivo" logo abaixo do botão na mesma aba
     if st.session_state.cardapio_atual is not None:
         st.divider()
         hora_agora = datetime.now(fuso_local).strftime("%H:%M")
         
         with st.container(border=True):
-            st.markdown(f"#### 🎯 Progresso e Macros (Agora: {hora_agora})")
+            st.markdown(f"#### 🎯 Seu Progresso (Agora: {hora_agora})")
             resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("🔥 Kcal", resumo.get('calorias_totais', '0'))
@@ -234,19 +289,19 @@ with tab3:
                             idx = st.session_state.despensa.index[st.session_state.despensa['Alimento'] == item.get("nome_exato")].tolist()
                             if idx: st.session_state.despensa.at[idx[0], 'Quantidade'] -= float(item.get("qtd_descontada", 0))
                         salvar_despensa(st.session_state.despensa)
-                        st.toast(f"✅ Refeição {ref['nome']} concluída! Estoque atualizado.")
+                        st.toast(f"🎉 Mandou bem! Refeição '{ref['nome']}' concluída.")
                         st.rerun()
 
 # --- ABA 4: PLANO IDEAL (METAS FLEXÍVEIS) ---
 with tab4:
-    st.markdown("### 👩‍⚕️ Estrutura Flexível (Cenário Ideal)")
-    st.write("A Nutricionista ignora o estoque e define **Metas de Macros** por refeição para te dar autonomia.")
+    st.markdown("### 👩‍⚕️ Estrutura Flexível Ouro")
+    st.write("A Nutri ignora o que você tem em casa e te entrega a estrutura perfeita para dominar a insulina. Use para fazer a lista do mercado de amanhã!")
     
-    if st.button("👩‍⚕️ Gerar Estrutura Ideal", use_container_width=True):
+    if st.button("✨ Descobrir Meu Plano Ideal", use_container_width=True):
         if not api_configurada:
-            st.error("Configure API nos secrets.")
+            st.error("⚠️ Ops! Configure sua chave de API nos secrets primeiro.")
         else:
-            with st.spinner("Desenhando seu mapa nutricional ideal..."):
+            with st.spinner("Desenhando seu mapa nutricional perfeito..."):
                 prompt_ideal = f"""
                 Nutricionista especialista em RI e Dieta Flexível. Crie um PLANO DE METAS (Macros) e GUIA DE ESTRUTURAÇÃO DE PRATOS. IGNORAR ESTOQUE.
                 REGRAS: Carbo Complexo SEMPRE com Proteína/Gordura Boa. Nenhuma salada matinal.
@@ -257,9 +312,9 @@ with tab4:
                     resposta_ideal = modelo.generate_content(prompt_ideal)
                     texto_limpo_ideal = re.search(r'\{.*\}', resposta_ideal.text.strip(), re.DOTALL).group(0) if re.search(r'\{.*\}', resposta_ideal.text.strip(), re.DOTALL) else resposta_ideal.text.strip()
                     st.session_state.cardapio_ideal = json.loads(texto_limpo_ideal)
-                    st.toast("✨ Seu Mapa Nutricional Ideal está pronto!")
+                    st.toast("✨ Seu Mapa Nutricional Ouro está pronto para leitura!")
                 except Exception as e:
-                    st.error(f"🚨 Erro na IA: {e}")
+                    st.error(f"🚨 Tropeço na IA: {e}")
                     
     if st.session_state.cardapio_ideal:
         metas = st.session_state.cardapio_ideal.get("metas_diarias", {})
@@ -272,40 +327,41 @@ with tab4:
         st.divider()
         for ref_ideal in st.session_state.cardapio_ideal.get("refeicoes", []):
             with st.container(border=True):
-                st.markdown(f"#### ⏰ {ref_ideal.get('hora', '')} - {ref_ideal.get('nome', '')} ({ref_ideal.get('alvo_macros', '')})")
+                st.markdown(f"#### ⏰ {ref_ideal.get('hora', '')} - {ref_ideal.get('nome', '')}")
+                st.caption(f"**🎯 Alvo:** {ref_ideal.get('alvo_macros', '')}")
                 st.markdown(f"**🧩 Montagem:** {ref_ideal.get('estrutura_prato', '')}")
-                st.markdown(f"**💡 Opções:** {ref_ideal.get('sugestoes_flexiveis', '')}")
-                st.info(f"👩‍⚕️ **Clínica:** {ref_ideal.get('instrucao_clinica', '')}")
+                st.markdown(f"**💡 Opções Rápidas:** {ref_ideal.get('sugestoes_flexiveis', '')}")
+                st.info(f"👩‍⚕️ **Explicação Clínica:** {ref_ideal.get('instrucao_clinica', '')}")
 
 # --- ABA 5: CHAT COM A NUTRICIONISTA ---
 with tab5:
-    st.markdown("### 💬 Nutri de Bolso 24h")
-    st.write("Envie a foto do seu prato para avaliação de macros e pico de insulina.")
+    st.markdown("### 💬 Chat com a Nutri")
+    st.write("Dúvidas no mercado? Restaurante a quilo? Envie a foto e tire a prova real.")
 
-    foto_upload = st.file_uploader("📸 Enviar foto do prato", type=["jpg", "jpeg", "png"])
+    foto_upload = st.file_uploader("📸 Enviar foto do prato ou rótulo", type=["jpg", "jpeg", "png"])
 
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    prompt_chat = st.chat_input("Ex: Avalie a carga glicêmica desse prato...")
+    prompt_chat = st.chat_input("Ex: Nutri, posso trocar o arroz por batata doce agora?")
     
     if prompt_chat:
         if not api_configurada:
-            st.error("Configure sua chave de API nos secrets.")
+            st.error("⚠️ Configure sua chave de API primeiro.")
         else:
             st.session_state.chat_history.append({"role": "user", "content": prompt_chat})
             with st.chat_message("user"):
                 st.markdown(prompt_chat)
                 if foto_upload:
                     st.image(foto_upload, width=250)
-                    st.caption("Imagem enviada para análise.")
+                    st.caption("📷 Foto enviada para a central.")
 
             with st.chat_message("assistant"):
-                with st.spinner("A Nutri está digitando..."):
+                with st.spinner("A Nutri está digitando um áudio... ops, digitando texto..."):
                     try:
                         conteudo_ia = [
-                            "Você é a NutryAi, Nutricionista Clínica especialista em Resistência à Insulina e Dieta Flexível. Seja prestativa e direta. Se o paciente enviar imagem, avalie os alimentos, estime calorias, liste os macros por cima e diga se o prato favorece picos de insulina (orientando correções rápidas).",
+                            "Você é a NutryAi, Nutricionista Clínica especialista em Resistência à Insulina e Dieta Flexível. Seja prestativa, use tom amigável. Avalie impactos na insulina se o paciente perguntar sobre alimentos ou fotos.",
                             prompt_chat
                         ]
                         if foto_upload:
@@ -317,5 +373,5 @@ with tab5:
                         st.session_state.chat_history.append({"role": "assistant", "content": resposta_chat.text})
                     
                     except Exception as e:
-                        st.error(f"Erro ao falar com a Nutri: {e}")
+                        st.error(f"Erro no sinal com a Nutri: {e}")
 
