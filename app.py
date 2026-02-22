@@ -86,10 +86,10 @@ st.markdown("""
         transform: scale(0.98);
     }
 
-    /* 7. Botões Redondos de Ação Perfeitos (Círculos Absolutos) */
+    /* 7. Botões Redondos de Ação Perfeitos (Círculos Absolutos e Centralizados) */
     div[data-testid="stPopover"] {
         display: flex !important;
-        justify-content: center !important; /* Força o botão pro meio da coluna */
+        justify-content: center !important; 
     }
     div[data-testid="stPopover"] > button {
         width: 60px !important;
@@ -223,11 +223,11 @@ with tab1:
 with tab2:
     st.markdown("### 🛒 Seu Estoque")
     
-    # Colunas proporcionais para centralizar os botões
-    c_espaco_esq, col_add, col_rem, c_espaco_dir = st.columns([1.5, 1, 1, 1.5])
+    # AQUI ESTÁ A MÁGICA DE POSICIONAMENTO: 
+    # Paredes laterais grandes (1) e botões espremidos no centro (0.25)
+    c_espaco_esq, col_add, col_rem, c_espaco_dir = st.columns([1, 0.25, 0.25, 1])
     
     with col_add:
-        # ATENÇÃO: Tirei o use_container_width=True daqui para não achatar o círculo!
         with st.popover("➕"):
             st.markdown("#### Novo Alimento")
             novo_nome = st.text_input("Alimento")
@@ -243,7 +243,6 @@ with tab2:
                     st.rerun()
     
     with col_rem:
-        # ATENÇÃO: Tirei o use_container_width=True daqui também!
         with st.popover("🗑️"):
             st.markdown("#### Excluir Alimento")
             lista_alimentos = st.session_state.despensa["Alimento"].tolist()
@@ -425,3 +424,4 @@ with tab5:
                     
                     except Exception as e:
                         st.error(f"Erro na resposta: {e}")
+
