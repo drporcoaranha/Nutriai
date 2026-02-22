@@ -125,6 +125,33 @@ st.markdown("""
         background-color: #E9E9EB !important; 
         color: black !important;
     }
+
+    /* 9. Tabela Fluida Nativa Estilo iOS (Fim do scroll duplo!) */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+    }
+    th {
+        color: #8E8E93 !important;
+        font-weight: 600 !important;
+        border-bottom: 1px solid #E5E5EA !important;
+        text-align: left !important;
+        padding-bottom: 8px !important;
+    }
+    td, th {
+        padding: 12px 8px !important;
+        border-bottom: 1px solid #E5E5EA !important;
+        border-top: none !important;
+        border-left: none !important;
+        border-right: none !important;
+    }
+    tr:last-child td {
+        border-bottom: none !important; /* Tira a linha do último item */
+    }
+    tbody tr:hover {
+        background-color: rgba(0, 122, 255, 0.05) !important;
+    }
     
     </style>
     
@@ -223,8 +250,7 @@ with tab1:
 with tab2:
     st.markdown("### 🛒 Seu Estoque")
     
-    # AQUI ESTÁ A MÁGICA DE POSICIONAMENTO: 
-    # Paredes laterais grandes (1) e botões espremidos no centro (0.25)
+    # Paredes laterais grandes e botões espremidos no centro
     c_espaco_esq, col_add, col_rem, c_espaco_dir = st.columns([1, 0.25, 0.25, 1])
     
     with col_add:
@@ -254,11 +280,18 @@ with tab2:
                 st.rerun()
 
     st.write("") # Espaçamento respirável
+    
+    # --- MÁGICA DA TABELA FLUIDA ---
     df_visual = st.session_state.despensa.copy()
     def formatar_estoque(row):
         return "❌ ESGOTADO" if row["Quantidade"] <= 0 else f"{row['Quantidade']} {row['Unidade']}"
     df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
-    st.dataframe(df_visual[["Alimento", "Disponível", "Pronto/Rápido"]], use_container_width=True, hide_index=True)
+    
+    # Define "Alimento" como o índice para esconder os números feios (0, 1, 2...)
+    df_visual.set_index("Alimento", inplace=True)
+    
+    # Usa st.table no lugar de st.dataframe para rolar junto com a tela inteira!
+    st.table(df_visual[["Disponível", "Pronto/Rápido"]])
 
     st.divider()
     st.markdown("### 📝 Lista do Mercado")
@@ -424,4 +457,3 @@ with tab5:
                     
                     except Exception as e:
                         st.error(f"Erro na resposta: {e}")
-
