@@ -187,16 +187,15 @@ if not st.session_state.logged_in and "code" in st.query_params:
         else: st.query_params.clear()
     except Exception as e: pass
 
-# --- 7. UX 8.1: CSS PREMIUM + ACESSIBILIDADE ALTO CONTRASTE ---
+# --- 7. UX 8.2: CSS PREMIUM COM LAYOUT ESTÁVEL ---
 st.markdown(f"""
     <style>
-    /* Variáveis Globais de Cor */
     :root {{ 
         --bg-color: #F5F5F7; 
         --card-bg: #FFFFFF; 
         --border-color: #E5E5EA; 
-        --input-border: #C7C7CC; /* Nova borda mais escura para os inputs */
-        --input-bg: #FAFAFA; /* Fundo levemente contrastante */
+        --input-border: #C7C7CC; 
+        --input-bg: #FAFAFA; 
         --text-primary: #1C1C1E; 
         --text-secondary: #8E8E93;
         --shadow-color: rgba(0, 0, 0, 0.04); 
@@ -208,7 +207,7 @@ st.markdown(f"""
             --bg-color: #000000; 
             --card-bg: #1C1C1E; 
             --border-color: #2C2C2E; 
-            --input-border: #48484A; /* Nova borda forte para inputs no escuro */
+            --input-border: #48484A; 
             --input-bg: #2C2C2E; 
             --text-primary: #F2F2F7; 
             --text-secondary: #8E8E93;
@@ -218,73 +217,70 @@ st.markdown(f"""
         }}
     }}
 
-    /* Limpeza Nativa do Streamlit */
+    /* Limpeza Nativa */
     [data-testid="stSidebar"] {{ display: none !important; }}
     [data-testid="collapsedControl"] {{ display: none !important; }}
     #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
-    .block-container {{padding-top: 2rem; padding-bottom: 5rem; max-width: 600px;}}
+    
+    /* Previne a quebra do layout limitando a largura central */
+    .block-container {{
+        padding-top: 2rem; 
+        padding-bottom: 5rem; 
+        max-width: 600px !important; 
+        margin: 0 auto !important;
+    }}
+    
     .stApp {{ background-color: var(--bg-color) !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Helvetica, Arial, sans-serif !important; }}
     
-    /* Cartões Modernos (Soft UI) */
+    /* Cartões Modernos */
     div[data-testid="stVerticalBlockBorderWrapper"] > div {{
         background-color: var(--card-bg) !important; 
         border-radius: 20px !important; 
         border: 1px solid var(--border-color) !important; 
         box-shadow: 0px 8px 24px var(--shadow-color) !important; 
         padding: 20px !important;
-        transition: transform 0.2s ease;
     }}
     
-    /* 🔥 SOLUÇÃO: ALTO CONTRASTE PARA TODOS OS CAMPOS DE OPÇÃO E HORÁRIO 🔥 */
+    /* Campos de Entrada Alto Contraste */
     div[data-baseweb="input"] > div, 
     div[data-baseweb="select"] > div {{
         border: 1.5px solid var(--input-border) !important;
         background-color: var(--input-bg) !important;
         border-radius: 12px !important;
-        transition: all 0.2s ease;
     }}
     div[data-baseweb="input"] > div:focus-within, 
     div[data-baseweb="select"] > div:focus-within {{
         border-color: var(--accent-color) !important;
         box-shadow: 0 0 0 2px rgba(52,199,89,0.2) !important;
     }}
-    
-    /* Força os textos digitados a ficarem visíveis */
     input {{ color: var(--text-primary) !important; font-size: 16px !important; padding: 12px 14px !important; }}
     
-    /* Botões Refinados */
+    /* Botões */
     div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{
         border-radius: 16px !important; 
         height: 50px !important; 
         font-weight: 700 !important; 
         font-size: 16px !important; 
-        border: 1px solid var(--input-border) !important; /* Borda mais visível nos botões simples */
+        border: 1px solid var(--input-border) !important;
         background-color: var(--card-bg) !important; 
         color: var(--text-primary) !important;
-        transition: all 0.2s ease-in-out !important;
     }}
-    div[data-testid="stButton"] button:hover {{ transform: scale(0.98); opacity: 0.9; }}
     div[data-testid="stButton"] button[kind="primary"] {{ 
         background: var(--accent-gradient) !important; 
         color: white !important; 
         border: none !important; 
-        box-shadow: 0 4px 14px rgba(52,199,89,0.3) !important;
     }}
     
-    /* Abas (Segmented Controls Estilo iOS) */
+    /* 🚨 ABAS CORRIGIDAS: Removido o display flex que quebrava a tela 🚨 */
     div[data-testid="stTabs"] > div:first-child {{
         background-color: var(--bg-color); 
-        backdrop-filter: blur(20px); 
-        -webkit-backdrop-filter: blur(20px);
-        padding-top: 15px; 
-        padding-bottom: 15px; 
-        border-bottom: none !important; 
+        padding-top: 10px; 
+        padding-bottom: 10px; 
+        position: -webkit-sticky;
         position: sticky; 
         top: 0px; 
         z-index: 999;
-        display: flex;
-        gap: 5px;
-        justify-content: center;
+        border-bottom: 1px solid var(--border-color);
     }}
     div[data-testid="stTabs"] button[data-baseweb="tab"] {{
         background-color: transparent !important;
@@ -292,8 +288,6 @@ st.markdown(f"""
         padding: 8px 16px !important;
         border: none !important;
         color: var(--text-secondary) !important;
-        font-weight: 600 !important;
-        font-size: 1.2rem !important;
     }}
     div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {{
         background-color: var(--card-bg) !important;
@@ -304,30 +298,18 @@ st.markdown(f"""
         font-size: 1.2rem !important; margin: 0 !important; padding: 0 !important;
     }}
 
-    /* Botões Customizados */
-    .btn-google-nativo {{
-        display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1.5px solid var(--input-border); border-radius: 16px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease; box-shadow: 0 2px 8px var(--shadow-color);
-    }}
-    .btn-google-nativo:hover {{ transform: scale(0.98); text-decoration: none; color: var(--text-primary); }}
+    /* Estilos Adicionais */
+    .btn-google-nativo {{ display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1.5px solid var(--input-border); border-radius: 16px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; box-shadow: 0 2px 8px var(--shadow-color); }}
+    .btn-pro {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: #000 !important; border-radius: 16px; height: 55px; font-weight: 800; font-size: 18px; border: none; width: 100%; text-decoration: none; }}
+    .btn-whatsapp {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #30D158 0%, #28CD41 100%); color: #FFF !important; border-radius: 16px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; margin-top: 15px; }}
 
-    .btn-pro {{
-        display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: #000 !important; border-radius: 16px; height: 55px; font-weight: 800; font-size: 18px; border: none; width: 100%; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.3); transition: all 0.2s ease; cursor: pointer; text-decoration: none;
-    }}
-    .btn-pro:hover {{ transform: scale(0.98); }}
-
-    .btn-whatsapp {{
-        display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #30D158 0%, #28CD41 100%); color: #FFF !important; border-radius: 16px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease; margin-top: 15px; box-shadow: 0 4px 14px rgba(48, 209, 88, 0.3);
-    }}
-    .btn-whatsapp:hover {{ transform: scale(0.98); text-decoration: none; color: white; }}
-
-    /* Tabelas e Barras */
     table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; background-color: transparent; }}
     th {{ color: var(--text-secondary) !important; font-weight: 600 !important; border-bottom: 1px solid var(--border-color) !important; text-align: left !important; padding-bottom: 10px !important; }}
     td, th {{ padding: 14px 8px !important; border-bottom: 1px solid var(--border-color) !important; border-top: none !important; border-left: none !important; border-right: none !important; color: var(--text-primary) !important; }}
     tr:last-child td {{ border-bottom: none !important; }}
     
     .macro-bar-container {{ width: 100%; background-color: var(--border-color); border-radius: 10px; height: 8px; margin-top: 6px; overflow: hidden; }}
-    .macro-bar-fill {{ height: 100%; border-radius: 10px; transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }}
+    .macro-bar-fill {{ height: 100%; border-radius: 10px; transition: width 0.8s ease; }}
     .bg-kcal {{ background: linear-gradient(90deg, #FF9500, #FFCC00); }} 
     .bg-prot {{ background: linear-gradient(90deg, #34C759, #32D74B); }} 
     .bg-carb {{ background: linear-gradient(90deg, #007AFF, #5AC8FA); }} 
@@ -336,20 +318,10 @@ st.markdown(f"""
     .adapt-text {{ color: var(--text-primary) !important; }}
     .sub-text {{ color: var(--text-secondary) !important; font-size: 0.95rem; }}
     
-    /* Logotipo */
-    .brand-container {{
-        display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 35px; margin-top: 10px;
-    }}
-    .brand-icon-box {{
-        background: var(--accent-gradient);
-        width: 70px; height: 70px; border-radius: 20px; display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 8px 20px rgba(52, 199, 89, 0.3); margin-bottom: 15px;
-    }}
+    .brand-container {{ display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 35px; margin-top: 10px; }}
+    .brand-icon-box {{ background: var(--accent-gradient); width: 70px; height: 70px; border-radius: 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(52, 199, 89, 0.3); margin-bottom: 15px; }}
     .brand-icon {{ font-size: 38px; line-height: 1; }}
-    .brand-text {{
-        font-size: 2.8rem; font-weight: 900; margin: 0; padding: 0; line-height: 1.1;
-        background: var(--text-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -1px;
-    }}
+    .brand-text {{ font-size: 2.8rem; font-weight: 900; margin: 0; padding: 0; line-height: 1.1; background: var(--text-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -1px; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -695,7 +667,7 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # BOTÃO SIMULADOR VOLTOU! (Enquanto a Stripe avalia)
+                # BOTÃO SIMULADOR
                 if st.button("Liberar Acesso PRO (Test Drive)", use_container_width=True):
                     st.session_state.perfil["plano"] = "premium"
                     salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
