@@ -187,17 +187,23 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- INTERCEPTADOR DO GOOGLE ---
+# --- INTERCEPTADOR DO GOOGLE (À PROVA DE FALHAS) ---
 if not st.session_state.logged_in and "code" in st.query_params:
     st.info("🔄 Conectando com o Google...")
+    
+    # 🚨 SOLUÇÃO: Captura o código e limpa a URL IMEDIATAMENTE para evitar leitura dupla 🚨
     codigo_autorizacao = st.query_params["code"]
+    st.query_params.clear()
+    
     try:
         token_url = "https://oauth2.googleapis.com/token"
         token_data = {"code": codigo_autorizacao, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "redirect_uri": REDIRECT_URI, "grant_type": "authorization_code"}
         res = requests.post(token_url, data=token_data)
+        
         if res.status_code == 200:
             access_token = res.json().get("access_token")
             user_res = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
+            
             if user_res.status_code == 200:
                 google_user = user_res.json()
                 username_google = google_user.get("email") 
@@ -207,17 +213,21 @@ if not st.session_state.logged_in and "code" in st.query_params:
                     if len(res_db.data) == 0:
                         criar_conta(username_google, nome_google, "google_sso_senha_dummy")
                         res_db = supabase.table('users').select('*').eq('username', username_google).execute()
+                    
                     user_db = res_db.data[0]
                     st.session_state.logged_in = True
                     st.session_state.username = username_google
                     st.session_state.nome_usuario = user_db.get('nome', 'Usuário')
                     st.session_state.perfil = user_db.get("perfil") if isinstance(user_db.get("perfil"), dict) else {}
                     st.session_state.despensa = carregar_despensa(username_google)
-                    if cookies_enabled: cookie_controller.set("nutriai_auth_user", username_google, max_age=30*86400)
+                    
+                    if cookies_enabled: 
+                        cookie_controller.set("nutriai_auth_user", username_google, max_age=30*86400)
+                        time.sleep(0.5) # Dá tempo ao navegador para gravar o cookie firmemente
+                        
                 except Exception as e: pass
-                st.query_params.clear()
-                st.rerun()
-        else: st.query_params.clear()
+        
+        st.rerun() # Recarrega a tela apenas uma vez no final do processo
     except Exception as e: pass
 
 # --- 7. UX CSS PREMIUM ---
@@ -285,14 +295,15 @@ if not st.session_state.logged_in:
                         
                         if lembrar_me and cookies_enabled:
                             cookie_controller.set("nutriai_auth_user", login_user, max_age=30*86400)
+                            time.sleep(0.5)
                         st.rerun()
                     else: st.error("Usuário ou senha incorretos.")
             else: st.warning("Preencha todos os campos.")
                 
-        # MARGENS DO "OU" REDUZIDAS PARA 5PX
         st.markdown("<div style='text-align: center; margin: 5px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
         if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
 
+    st.write("")
     with st.expander("Não tem uma conta? Clique aqui para criar"):
         cad_nome = st.text_input("Como quer ser chamado?")
         cad_user = st.text_input("Nome de usuário (ex: pablo)").lower()
@@ -591,9 +602,9 @@ else:
                                 
                     if not tem_estoque:
                         with st.container(border=True):
-                            st.markdown("<h4 class='adapt-text'>🛒 2. Sua despensa está vazia!</h4>", unsafe_allow_html=True)
-                            st.write("Para que a IA crie um cardápio prático e real, adicione o que você tem na geladeira agora.")
-                            n_nome = st.text_input("O que você tem hoje?", key="fast_alimento", placeholder="Ex: Ovos, Frango, Aveia...")
+                            st.markdown("<h4 class='adapt-text'>✨ 2. Sua despensa parece estar vazia!</h4>", unsafe_allow_html=True)
+                            st.write("Para que a IA crie um cardápio perfeito e sem desperdícios, adicione o que você tem na geladeira agora:")
+                            n_nome = st.text_input("🛒 O que tem na geladeira?", key="fast_alimento", placeholder="Ex: Ovos, Frango, Aveia...")
                             n_qtd = st.number_input("Quantidade", min_value=1.0, step=1.0, key="fast_qtd")
                             if st.button("➕ Salvar na Despensa", type="primary", use_container_width=True):
                                 if n_nome:
