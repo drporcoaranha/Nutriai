@@ -96,7 +96,6 @@ def carregar_despensa(username):
             if 'quantidade' in df.columns:
                 df['quantidade'] = pd.to_numeric(df['quantidade'], errors='coerce').fillna(0)
             df = df.rename(columns={"alimento": "Alimento", "quantidade": "Quantidade", "unidade": "Unidade", "pronto_rapido": "Pronto/Rápido"})
-            # Garante que as colunas existam
             colunas_necessarias = ['Alimento', 'Quantidade', 'Unidade', 'Pronto/Rápido']
             for col in colunas_necessarias:
                 if col not in df.columns:
@@ -135,7 +134,8 @@ api_configurada = False
 if "GEMINI_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        modelo = genai.GenerativeModel('gemini-2.5-flash') 
+        # Alterado para a versão 1.5 flash para garantir compatibilidade e evitar erros
+        modelo = genai.GenerativeModel('gemini-1.5-flash') 
         api_configurada = True
     except Exception as e: pass
 
@@ -290,7 +290,6 @@ if not st.session_state.logged_in:
 # ==========================================
 else:
     try:
-        # Recuperação super segura do perfil
         perfil_seguro = st.session_state.perfil if isinstance(st.session_state.perfil, dict) else {}
         
         p_idade = safe_int(perfil_seguro.get("idade"), 30)
@@ -304,7 +303,6 @@ else:
         eh_pro = str(perfil_seguro.get("plano", "gratis")) == "premium"
         badge_pro = "👑 PRO" if eh_pro else ""
 
-        # Gamificação segura
         hoje = datetime.now(fuso_local).date()
         hoje_str = hoje.strftime("%Y-%m-%d")
         ontem = hoje - timedelta(days=1)
@@ -408,7 +406,6 @@ else:
                     novo_pronto = st.radio("Pronto?", ["Não", "Sim"], horizontal=True)
                     if st.button("Salvar", type="primary") and novo_nome:
                         novo_item = pd.DataFrame({"Alimento": [novo_nome], "Quantidade": [float(nova_qtd)], "Unidade": [nova_unidade], "Pronto/Rápido": [novo_pronto]})
-                        # Tratamento seguro caso a despensa esteja vazia
                         if st.session_state.despensa.empty:
                             st.session_state.despensa = novo_item
                         else:
@@ -426,7 +423,6 @@ else:
                             st.rerun()
                     else: st.write("Estoque vazio.")
             
-            # Verificação de segurança da Despensa
             df_visual = st.session_state.despensa.copy() if not st.session_state.despensa.empty else pd.DataFrame()
             if not df_visual.empty and 'Quantidade' in df_visual.columns:
                 def formatar_estoque(row): 
@@ -439,9 +435,10 @@ else:
                 st.table(df_visual[["Disponível"]])
                 
                 st.divider()
-                # Conversão segura para filtragem
-                df_visual['Quantidade_Num'] = pd.to_numeric(st.session_state.despensa['Quantidade'], errors='coerce').fillna(0)
-                estoque_zerado = st.session_state.despensa[df_visual['Quantidade_Num'] <= 0]
+                
+                # --- A VACINA DO PANDAS ---
+                qtd_numerica = pd.to_numeric(st.session_state.despensa['Quantidade'], errors='coerce').fillna(0)
+                estoque_zerado = st.session_state.despensa[qtd_numerica <= 0]
                 
                 if not estoque_zerado.empty:
                     st.warning("⚠️ Lista do Mercado:")
@@ -608,7 +605,6 @@ else:
                                 except Exception as e: st.error(f"Erro na resposta: {e}")
 
     except Exception as general_error:
-        # SE ALGO DER ERRADO AGORA, ELE NÃO FICA CINZA, ELE MOSTRA O ERRO EXATO NA TELA!
         st.error("🚨 Encontramos uma inconsistência nos seus dados no banco de dados.")
         st.code(traceback.format_exc())
         if st.button("Tentar recarregar página"): st.rerun()
