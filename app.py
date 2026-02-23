@@ -80,7 +80,6 @@ def criar_conta(username, nome, senha):
     try:
         res = supabase.table('users').select('username').eq('username', username).execute()
         if len(res.data) > 0: return False 
-        
         novo_perfil = {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento Saudável", "atividade": "Moderadamente Ativo", "foto": None, "streak": 1, "last_login": "", "historico_peso": [], "plano": "gratis"}
         supabase.table('users').insert({"username": username, "nome": nome, "senha": hash_senha(senha), "perfil": novo_perfil}).execute()
         return True
@@ -95,18 +94,14 @@ def carregar_despensa(username):
         res = supabase.table('despensa').select('*').eq('username', username).execute()
         if len(res.data) > 0:
             df = pd.DataFrame(res.data)
-            if 'quantidade' in df.columns:
-                df['quantidade'] = pd.to_numeric(df['quantidade'], errors='coerce').fillna(0)
+            if 'quantidade' in df.columns: df['quantidade'] = pd.to_numeric(df['quantidade'], errors='coerce').fillna(0)
             df = df.rename(columns={"alimento": "Alimento", "quantidade": "Quantidade", "unidade": "Unidade", "pronto_rapido": "Pronto/Rápido"})
             colunas_necessarias = ['Alimento', 'Quantidade', 'Unidade', 'Pronto/Rápido']
             for col in colunas_necessarias:
-                if col not in df.columns:
-                    df[col] = "" if col != 'Quantidade' else 0.0
+                if col not in df.columns: df[col] = "" if col != 'Quantidade' else 0.0
             return df[colunas_necessarias]
     except Exception as e: pass
-    
-    df_padrao = pd.DataFrame({"Alimento": ["Ovos", "Aveia", "Frango"], "Quantidade": [12.0, 500.0, 1000.0], "Unidade": ["un", "g", "g"], "Pronto/Rápido": ["Sim", "Sim", "Não"]})
-    return df_padrao
+    return pd.DataFrame({"Alimento": ["Ovos", "Aveia", "Frango"], "Quantidade": [12.0, 500.0, 1000.0], "Unidade": ["un", "g", "g"], "Pronto/Rápido": ["Sim", "Sim", "Não"]})
 
 def salvar_despensa(df, username):
     try:
@@ -119,6 +114,10 @@ def salvar_despensa(df, username):
             supabase.table('despensa').insert(records).execute()
     except Exception as e: pass
 
+def extrair_numero(texto):
+    numeros = re.findall(r'\d+', str(texto))
+    return int(numeros[0]) if numeros else 0
+
 def safe_int(valor, padrao):
     try: return int(valor) if valor is not None else padrao
     except: return padrao
@@ -127,20 +126,15 @@ def safe_float(valor, padrao):
     try: return float(valor) if valor is not None else padrao
     except: return padrao
 
-# --- 5. VERIFICAÇÃO DE API GEMINI (AUTO-DISCOVERY / ESTÁVEL) ---
+# --- 5. VERIFICAÇÃO DE API GEMINI ---
 api_configurada = False
 if "GEMINI_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        # Lê os modelos e escolhe o melhor disponível (priorizando 2.5)
         modelos_disponiveis = [m.name for m in genai.list_models() if 'flash' in m.name]
-        if "models/gemini-2.5-flash" in modelos_disponiveis:
-            modelo_exato = "models/gemini-2.5-flash"
-        elif modelos_disponiveis:
-            modelo_exato = modelos_disponiveis[-1]
-        else:
-            modelo_exato = "gemini-pro"
-            
+        if "models/gemini-2.5-flash" in modelos_disponiveis: modelo_exato = "models/gemini-2.5-flash"
+        elif modelos_disponiveis: modelo_exato = modelos_disponiveis[-1]
+        else: modelo_exato = "gemini-pro"
         modelo = genai.GenerativeModel(modelo_exato) 
         api_configurada = True
     except Exception as e: pass
@@ -163,15 +157,11 @@ def fazer_logout():
 
 # --- INTERCEPTADOR DO GOOGLE ---
 if not st.session_state.logged_in and "code" in st.query_params:
-    st.info("🔄 Autenticando com o Google... Preparando seu painel.")
+    st.info("🔄 Conectando...")
     codigo_autorizacao = st.query_params["code"]
-    client_id_limpo = str(GOOGLE_CLIENT_ID).strip().replace('"', '').replace("'", "")
-    client_secret_limpo = str(GOOGLE_CLIENT_SECRET).strip().replace('"', '').replace("'", "")
-    redirect_limpo = str(REDIRECT_URI).strip().replace('"', '').replace("'", "")
-    
     try:
         token_url = "https://oauth2.googleapis.com/token"
-        token_data = {"code": codigo_autorizacao, "client_id": client_id_limpo, "client_secret": client_secret_limpo, "redirect_uri": redirect_limpo, "grant_type": "authorization_code"}
+        token_data = {"code": codigo_autorizacao, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "redirect_uri": REDIRECT_URI, "grant_type": "authorization_code"}
         res = requests.post(token_url, data=token_data)
         if res.status_code == 200:
             access_token = res.json().get("access_token")
@@ -180,78 +170,178 @@ if not st.session_state.logged_in and "code" in st.query_params:
                 google_user = user_res.json()
                 username_google = google_user.get("email") 
                 nome_google = google_user.get("given_name", "Usuário") 
-                
                 try:
                     res_db = supabase.table('users').select('*').eq('username', username_google).execute()
                     if len(res_db.data) == 0:
                         criar_conta(username_google, nome_google, "google_sso_senha_dummy")
                         res_db = supabase.table('users').select('*').eq('username', username_google).execute()
-                    
                     user_db = res_db.data[0]
                     st.session_state.logged_in = True
                     st.session_state.username = username_google
                     st.session_state.nome_usuario = user_db.get('nome', 'Usuário')
-                    
-                    perfil_carregado = user_db.get("perfil")
-                    st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
+                    st.session_state.perfil = user_db.get("perfil") if isinstance(user_db.get("perfil"), dict) else {}
                     st.session_state.despensa = carregar_despensa(username_google)
                 except Exception as e: pass
                 st.query_params.clear()
                 st.rerun()
-        else:
-            st.query_params.clear()
+        else: st.query_params.clear()
     except Exception as e: pass
 
-# --- 7. CSS ADAPTATIVO (SCROLL CORRIGIDO) ---
+# --- 7. UX 8.0: CSS PREMIUM (APPLE STYLE) ---
 st.markdown(f"""
     <style>
-    :root {{ --bg-color: #F2F2F7; --card-bg: #FFFFFF; --border-color: #E5E5EA; --input-bg: #FAFAFA; --text-primary: #000000; --shadow-color: rgba(0, 0, 0, 0.04); --pro-color: #FFD700; }}
+    /* Variáveis Globais de Cor */
+    :root {{ 
+        --bg-color: #F5F5F7; 
+        --card-bg: #FFFFFF; 
+        --border-color: #E5E5EA; 
+        --input-bg: #F2F2F7; 
+        --text-primary: #1C1C1E; 
+        --text-secondary: #8E8E93;
+        --shadow-color: rgba(0, 0, 0, 0.03); 
+        --accent-color: #34C759;
+        --accent-gradient: linear-gradient(135deg, #34C759 0%, #32D74B 100%);
+    }}
     @media (prefers-color-scheme: dark) {{
-        :root {{ --bg-color: #0E1117; --card-bg: #262730; --border-color: #333333; --input-bg: #1A1C23; --text-primary: #FAFAFA; --shadow-color: rgba(0, 0, 0, 0.3); }}
+        :root {{ 
+            --bg-color: #000000; 
+            --card-bg: #1C1C1E; 
+            --border-color: #2C2C2E; 
+            --input-bg: #2C2C2E; 
+            --text-primary: #F2F2F7; 
+            --text-secondary: #8E8E93;
+            --shadow-color: rgba(0, 0, 0, 0.5); 
+            --accent-color: #30D158;
+            --accent-gradient: linear-gradient(135deg, #30D158 0%, #28CD41 100%);
+        }}
     }}
 
+    /* Limpeza Nativa do Streamlit */
     [data-testid="stSidebar"] {{ display: none !important; }}
     [data-testid="collapsedControl"] {{ display: none !important; }}
     #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
-    .block-container {{padding-top: 1rem; padding-bottom: 5rem; max-width: 600px;}}
-    .stApp {{ background-color: var(--bg-color) !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Helvetica, Arial, sans-serif !important; }}
+    .block-container {{padding-top: 2rem; padding-bottom: 5rem; max-width: 600px;}}
+    .stApp {{ background-color: var(--bg-color) !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Helvetica, Arial, sans-serif !important; }}
     
+    /* Cartões Modernos (Soft UI) */
     div[data-testid="stVerticalBlockBorderWrapper"] > div {{
-        background-color: var(--card-bg) !important; border-radius: 14px !important; border: 1px solid var(--border-color) !important; box-shadow: 0px 2px 10px var(--shadow-color) !important; padding: 15px !important;
+        background-color: var(--card-bg) !important; 
+        border-radius: 20px !important; 
+        border: 1px solid var(--border-color) !important; 
+        box-shadow: 0px 8px 24px var(--shadow-color) !important; 
+        padding: 20px !important;
+        transition: transform 0.2s ease;
     }}
     
+    /* Inputs Estilo Apple */
     div[data-testid="stTextInput"] input, div[data-testid="stNumberInput"] input {{
-        border: 1px solid var(--border-color) !important; border-radius: 10px !important; padding: 12px 14px !important; background-color: var(--input-bg) !important; color: var(--text-primary) !important;
+        border: 1px solid var(--border-color) !important; 
+        border-radius: 12px !important; 
+        padding: 14px 16px !important; 
+        background-color: var(--input-bg) !important; 
+        color: var(--text-primary) !important;
+        font-size: 16px !important;
     }}
+    div[data-testid="stTextInput"] input:focus {{ border-color: var(--accent-color) !important; box-shadow: 0 0 0 2px rgba(52,199,89,0.2) !important; }}
     
+    /* Botões Refinados */
     div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{
-        border-radius: 20px !important; height: 45px !important; font-weight: 600 !important; font-size: 16px !important; border: 1px solid var(--border-color) !important; transition: all 0.2s ease-in-out !important; background-color: var(--card-bg) !important; color: var(--text-primary) !important;
+        border-radius: 16px !important; 
+        height: 50px !important; 
+        font-weight: 700 !important; 
+        font-size: 16px !important; 
+        border: 1px solid var(--border-color) !important; 
+        background-color: var(--card-bg) !important; 
+        color: var(--text-primary) !important;
+        transition: all 0.2s ease-in-out !important;
     }}
-    div[data-testid="stButton"] button[kind="primary"] {{ background-color: #007AFF !important; color: white !important; border: none !important; }}
+    div[data-testid="stButton"] button:hover {{ transform: scale(0.98); opacity: 0.9; }}
+    div[data-testid="stButton"] button[kind="primary"] {{ 
+        background: var(--accent-gradient) !important; 
+        color: white !important; 
+        border: none !important; 
+        box-shadow: 0 4px 14px rgba(52,199,89,0.3) !important;
+    }}
     
-    .btn-google-nativo {{
-        display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 20px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease-in-out; box-shadow: 0 1px 3px var(--shadow-color);
+    /* Abas (Segmented Controls Estilo iOS) */
+    div[data-testid="stTabs"] > div:first-child {{
+        background-color: var(--bg-color); 
+        backdrop-filter: blur(20px); 
+        -webkit-backdrop-filter: blur(20px);
+        padding-top: 15px; 
+        padding-bottom: 15px; 
+        border-bottom: none !important; 
+        position: sticky; 
+        top: 0px; 
+        z-index: 999;
+        display: flex;
+        gap: 5px;
+        justify-content: center;
     }}
+    div[data-testid="stTabs"] button[data-baseweb="tab"] {{
+        background-color: transparent !important;
+        border-radius: 20px !important;
+        padding: 8px 16px !important;
+        border: none !important;
+        color: var(--text-secondary) !important;
+        font-weight: 600 !important;
+        font-size: 1.2rem !important;
+    }}
+    div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {{
+        background-color: var(--card-bg) !important;
+        color: var(--text-primary) !important;
+        box-shadow: 0 2px 8px var(--shadow-color) !important;
+    }}
+    div[data-testid="stTabs"] button[data-baseweb="tab"] > div[data-testid="stMarkdownContainer"] > p {{
+        font-size: 1.2rem !important; margin: 0 !important; padding: 0 !important;
+    }}
+
+    /* Botões Customizados */
+    .btn-google-nativo {{
+        display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 16px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease; box-shadow: 0 2px 8px var(--shadow-color);
+    }}
+    .btn-google-nativo:hover {{ transform: scale(0.98); text-decoration: none; color: var(--text-primary); }}
 
     .btn-pro {{
-        display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); color: #000 !important; border-radius: 20px; height: 55px; font-weight: 800; font-size: 18px; border: none; width: 100%; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.3);
+        display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: #000 !important; border-radius: 16px; height: 55px; font-weight: 800; font-size: 18px; border: none; width: 100%; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.3); transition: all 0.2s ease; cursor: pointer; text-decoration: none;
     }}
+    .btn-pro:hover {{ transform: scale(0.98); }}
 
-    table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; }}
-    th {{ color: #8E8E93 !important; font-weight: 600 !important; border-bottom: 1px solid var(--border-color) !important; text-align: left !important; padding-bottom: 8px !important; }}
-    td, th {{ padding: 12px 8px !important; border-bottom: 1px solid var(--border-color) !important; border-top: none !important; border-left: none !important; border-right: none !important; color: var(--text-primary) !important; }}
+    .btn-whatsapp {{
+        display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #30D158 0%, #28CD41 100%); color: #FFF !important; border-radius: 16px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease; margin-top: 15px; box-shadow: 0 4px 14px rgba(48, 209, 88, 0.3);
+    }}
+    .btn-whatsapp:hover {{ transform: scale(0.98); text-decoration: none; color: white; }}
+
+    /* Tabelas e Barras */
+    table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; background-color: transparent; }}
+    th {{ color: var(--text-secondary) !important; font-weight: 600 !important; border-bottom: 1px solid var(--border-color) !important; text-align: left !important; padding-bottom: 10px !important; }}
+    td, th {{ padding: 14px 8px !important; border-bottom: 1px solid var(--border-color) !important; border-top: none !important; border-left: none !important; border-right: none !important; color: var(--text-primary) !important; }}
     tr:last-child td {{ border-bottom: none !important; }}
     
-    .macro-bar-container {{ width: 100%; background-color: var(--border-color); border-radius: 8px; height: 10px; margin-top: 4px; overflow: hidden; }}
-    .macro-bar-fill {{ height: 100%; border-radius: 8px; transition: width 0.5s ease-in-out; }}
-    .bg-kcal {{ background-color: #FF9500; }} .bg-prot {{ background-color: #34C759; }} .bg-carb {{ background-color: #007AFF; }} .bg-gord {{ background-color: #AF52DE; }}
-
-    /* REMOVIDO o overflow-x e position sticky complexo que bugava a rolagem do celular */
-    div[data-testid="stTabs"] > div:first-child {{
-        background-color: var(--bg-color); padding-top: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);
-    }}
+    .macro-bar-container {{ width: 100%; background-color: var(--border-color); border-radius: 10px; height: 8px; margin-top: 6px; overflow: hidden; }}
+    .macro-bar-fill {{ height: 100%; border-radius: 10px; transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }}
+    .bg-kcal {{ background: linear-gradient(90deg, #FF9500, #FFCC00); }} 
+    .bg-prot {{ background: linear-gradient(90deg, #34C759, #32D74B); }} 
+    .bg-carb {{ background: linear-gradient(90deg, #007AFF, #5AC8FA); }} 
+    .bg-gord {{ background: linear-gradient(90deg, #AF52DE, #FF2D55); }}
     
     .adapt-text {{ color: var(--text-primary) !important; }}
+    .sub-text {{ color: var(--text-secondary) !important; font-size: 0.95rem; }}
+    
+    /* Logotipo HTML/CSS Avançado */
+    .brand-container {{
+        display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 35px; margin-top: 10px;
+    }}
+    .brand-icon-box {{
+        background: var(--accent-gradient);
+        width: 70px; height: 70px; border-radius: 20px; display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 8px 20px rgba(52, 199, 89, 0.3); margin-bottom: 15px;
+    }}
+    .brand-icon {{ font-size: 38px; line-height: 1; }}
+    .brand-text {{
+        font-size: 2.8rem; font-weight: 900; margin: 0; padding: 0; line-height: 1.1;
+        background: var(--text-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -1px;
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -259,27 +349,29 @@ st.markdown(f"""
 # MÓDULO 1: TELA DE LOGIN
 # ==========================================
 if not st.session_state.logged_in:
+    # --- NOVO LOGO PREMIUM ---
     st.markdown("""
-        <div style="text-align: center; margin-bottom: 25px; margin-top: 20px;">
-            <h1 style="font-size: 4rem; margin-bottom: 0;">🍏</h1>
-            <h1 class="adapt-text" style="font-weight: 800;">NutryAi</h1>
-            <p style="color: #8E8E93;">Sua rotina flexível.</p>
+        <div class="brand-container">
+            <div class="brand-icon-box"><span class="brand-icon">🍏</span></div>
+            <h1 class="brand-text">NutryAi</h1>
+            <p class="sub-text" style="margin-top: 8px;">Sua inteligência nutricional.</p>
         </div>
     """, unsafe_allow_html=True)
 
     with st.container(border=True):
-        login_user = st.text_input("Usuário", placeholder="ex: seu_nome", key="log_user")
-        login_senha = st.text_input("Senha", type="password", placeholder="••••••••", key="log_pass")
+        st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse sua conta</h4>", unsafe_allow_html=True)
+        login_user = st.text_input("Usuário", placeholder="Ex: pablo", label_visibility="collapsed")
+        login_senha = st.text_input("Senha", type="password", placeholder="Sua senha secreta", label_visibility="collapsed")
         
-        if st.button("Entrar", use_container_width=True, type="primary"):
+        st.write("")
+        if st.button("Entrar no App", use_container_width=True, type="primary"):
             if login_user and login_senha:
-                with st.spinner("🔄 Conectando aos servidores seguros... isso leva alguns segundos."):
+                with st.spinner("🔄 Conectando aos servidores seguros..."):
                     dados_usuario = validar_login(login_user, login_senha)
                     if dados_usuario:
                         st.session_state.logged_in = True
                         st.session_state.username = login_user
                         st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
-                        
                         perfil_carregado = dados_usuario.get("perfil")
                         st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
                         st.session_state.despensa = carregar_despensa(login_user)
@@ -287,16 +379,17 @@ if not st.session_state.logged_in:
                     else: st.error("Usuário ou senha incorretos.")
             else: st.warning("Preencha todos os campos.")
                 
-        st.markdown("<div style='text-align: center; margin: 15px 0; color: #8E8E93;'>ou</div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align: center; margin: 15px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
         if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
 
-    with st.expander("Criar Conta Nova"):
+    st.write("")
+    with st.expander("Não tem uma conta? Clique aqui para criar"):
         cad_nome = st.text_input("Como quer ser chamado?")
         cad_user = st.text_input("Nome de usuário (ex: pablo)").lower()
         cad_senha = st.text_input("Crie uma senha", type="password")
         if st.button("Criar Conta", use_container_width=True):
-            if criar_conta(cad_user, cad_nome, cad_senha): st.success("Conta criada! Pode logar.")
-            else: st.error("Usuário já existe.")
+            if criar_conta(cad_user, cad_nome, cad_senha): st.success("Conta criada! Feche essa aba e faça o login acima.")
+            else: st.error("Usuário já existe no sistema.")
 
 # ==========================================
 # MÓDULO 2: O APLICATIVO (LOGADO)
@@ -304,7 +397,6 @@ if not st.session_state.logged_in:
 else:
     try:
         perfil_seguro = st.session_state.perfil if isinstance(st.session_state.perfil, dict) else {}
-        
         p_idade = safe_int(perfil_seguro.get("idade"), 30)
         p_peso = safe_float(perfil_seguro.get("peso"), 70.0)
         p_altura = safe_int(perfil_seguro.get("altura"), 170)
@@ -312,9 +404,7 @@ else:
         p_atv = str(perfil_seguro.get("atividade") or "Moderada")
         foto_salva = perfil_seguro.get("foto")
         streak_atual = safe_int(perfil_seguro.get("streak"), 1)
-        
         eh_pro = str(perfil_seguro.get("plano", "gratis")) == "premium"
-        badge_pro = "👑 PRO" if eh_pro else ""
 
         hoje = datetime.now(fuso_local).date()
         hoje_str = hoje.strftime("%Y-%m-%d")
@@ -327,38 +417,37 @@ else:
                 if last_login_date == ontem: streak_atual += 1  
                 elif last_login_date < ontem: streak_atual = 1   
             except: pass
-        
         if last_login_str != hoje_str:
             st.session_state.perfil["last_login"] = hoje_str
             st.session_state.perfil["streak"] = streak_atual
             salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
 
         hora_atual = datetime.now(fuso_local).hour
-        if hora_atual < 12: saudacao, icone_tempo = "Bom dia", "☀️"
-        elif hora_atual < 18: saudacao, icone_tempo = "Boa tarde", "☕"
-        else: saudacao, icone_tempo = "Boa noite", "🌙"
+        if hora_atual < 12: saudacao = "Bom dia"
+        elif hora_atual < 18: saudacao = "Boa tarde"
+        else: saudacao = "Boa noite"
 
-        col_empty, col_title, col_profile = st.columns([1, 2.5, 1], vertical_alignment="center")
-        with col_title:
+        # HEADER PREMIUM REDESENHADO
+        col_text, col_profile = st.columns([3, 1], vertical_alignment="center")
+        with col_text:
+            badge_html = "<span style='background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: black; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;'>PRO</span>" if eh_pro else ""
             st.markdown(f"""
-                <div style="text-align: center; padding-top: 5px;">
-                    <h1 class="adapt-text" style="font-weight: 800; font-size: 2rem; margin-bottom: 0;">NutryAi <span style="font-size: 1rem; color:#FFD700;">{badge_pro}</span></h1>
-                    <p style="color: #8E8E93; font-size: 0.9rem; margin-top: -5px;">{saudacao}, {st.session_state.nome_usuario}! <span style="color:#FF9500; font-weight:bold;">🔥 {streak_atual}</span></p>
+                <div style="padding-top: 10px; padding-bottom: 5px;">
+                    <h2 class="adapt-text" style="font-weight: 800; font-size: 1.8rem; margin: 0; letter-spacing: -0.5px;">NutryAi{badge_html}</h2>
+                    <p class="sub-text" style="margin: 0; font-weight: 500;">{saudacao}, {st.session_state.nome_usuario} <span style="color:#FF9500; font-weight:bold; margin-left: 5px;">🔥 {streak_atual}</span></p>
                 </div>
             """, unsafe_allow_html=True)
             
         with col_profile:
-            with st.popover("⚙️", use_container_width=True):
+            with st.popover("⚙️ Ajustes", use_container_width=True):
                 tab_dados, tab_bio = st.tabs(["👤 Dados", "⚖️ Bio"])
-                
                 with tab_dados:
                     st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-                    if foto_salva: st.markdown(f'<img src="data:image/jpeg;base64,{foto_salva}" width="80" height="80" style="border-radius:50%; object-fit:cover; margin-bottom:10px;">', unsafe_allow_html=True)
-                    else: st.markdown('<div style="font-size: 40px; margin-bottom: 10px;">👤</div>', unsafe_allow_html=True)
+                    if foto_salva: st.markdown(f'<img src="data:image/jpeg;base64,{foto_salva}" width="80" height="80" style="border-radius:50%; object-fit:cover; margin-bottom:15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">', unsafe_allow_html=True)
+                    else: st.markdown('<div style="font-size: 40px; margin-bottom: 15px;">👤</div>', unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
-                    
-                    nova_foto = st.file_uploader("Trocar foto", type=["jpg", "png"])
-                    novo_nome = st.text_input("Nome", value=st.session_state.nome_usuario)
+                    nova_foto = st.file_uploader("Trocar foto", type=["jpg", "png"], label_visibility="collapsed")
+                    novo_nome = st.text_input("Seu Nome", value=st.session_state.nome_usuario)
                     nova_idade = st.number_input("Idade", value=p_idade)
 
                 with tab_bio:
@@ -367,14 +456,14 @@ else:
                     objetivos = ["Emagrecimento", "Hipertrofia", "Manutenção", "Controle Glicêmico"]
                     try: idx_obj = objetivos.index(p_obj)
                     except: idx_obj = 0
-                    novo_obj = st.selectbox("Objetivo", objetivos, index=idx_obj)
-                    
+                    novo_obj = st.selectbox("Objetivo Principal", objetivos, index=idx_obj)
                     atividades = ["Sedentário", "Leve", "Moderada", "Intensa"]
                     try: idx_atv = atividades.index(p_atv)
                     except: idx_atv = 2
-                    nova_atv = st.selectbox("Atividade", atividades, index=idx_atv)
+                    nova_atv = st.selectbox("Nível de Atividade", atividades, index=idx_atv)
                 
-                if st.button("💾 Salvar", type="primary", use_container_width=True):
+                st.write("")
+                if st.button("💾 Salvar Perfil", type="primary", use_container_width=True):
                     if nova_foto:
                         img = Image.open(nova_foto)
                         img.thumbnail((200, 200)) 
@@ -387,128 +476,127 @@ else:
                     salvar_perfil(st.session_state.username, novo_nome, st.session_state.perfil)
                     st.rerun() 
                 st.divider()
-                if st.button("🚪 Sair", use_container_width=True): fazer_logout()
+                if st.button("🚪 Sair da Conta", use_container_width=True): fazer_logout()
 
         dados_perfil_ia = f"{p_idade} anos, {p_peso}kg, {p_altura}cm. Objetivo: {p_obj}. Ativ: {p_atv}."
 
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🕒", "📦", "🍽️", "📈", "👩‍⚕️ PRO", "💬 PRO"])
+        # ABAS COM EMOJIS (Transformadas pelo CSS em pílulas IOS)
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🕒", "📦", "🍽️", "📈", "👑", "💬"])
 
-        # --- A AGENDA VOLTOU COMPLETA ---
         with tab1:
+            st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🕒 Sua Rotina Diária</h3>", unsafe_allow_html=True)
             with st.container(border=True):
-                st.subheader("Sua Rotina")
                 c1, c2 = st.columns(2)
                 hora_acordar = c1.time_input("☀️ Acordar", time(6, 30))
                 hora_dormir = c2.time_input("🌙 Dormir", time(23, 0))
-                
                 c3, c4 = st.columns(2)
                 trab_inicio = c3.time_input("💼 Trab. Início", time(8, 0))
                 trab_fim = c4.time_input("💼 Trab. Fim", time(17, 30))
-                
                 c5, c6 = st.columns(2)
                 transito_inicio = c5.time_input("🚗 Trâns. Início", time(17, 30))
                 transito_fim = c6.time_input("🏁 Trâns. Fim", time(18, 30))
-                
                 c7, c8 = st.columns(2)
                 treino_inicio = c7.time_input("💪 Treino Início", time(19, 0))
                 treino_fim = c8.time_input("🚿 Treino Fim", time(20, 0))
-                
                 c9, c10 = st.columns(2)
                 estudo_inicio = c9.time_input("📚 Estudo Início", time(20, 30))
                 estudo_fim = c10.time_input("📝 Estudo Fim", time(22, 0))
-                
                 st.divider()
-                tempo_preparo = st.slider("⏱️ Tempo de Preparo (min/dia)", 0, 120, 30)
-                if st.button("Salvar Horários", use_container_width=True, type="primary"):
+                tempo_preparo = st.slider("⏱️ Tempo livre para cozinhar (min/dia)", 0, 120, 30)
+                if st.button("Salvar Rotina", use_container_width=True, type="primary"):
                     st.session_state.cardapio_atual = None
                     st.session_state.consumidos = set()
-                    st.success("✅ Ajustes salvos.")
+                    st.success("✅ Ajustes salvos na Inteligência Artificial.")
 
         with tab2:
-            st.markdown("### 🛒 Seu Estoque")
+            st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>📦 Estoque & Mercado</h3>", unsafe_allow_html=True)
             col_add, col_rem = st.columns(2)
             with col_add:
-                with st.popover("➕ Novo", use_container_width=True):
-                    novo_nome = st.text_input("Alimento")
-                    nova_qtd = st.number_input("Qtd", min_value=0.0, step=1.0)
-                    nova_unidade = st.selectbox("Medida", ["g", "kg", "ml", "L", "un", "dose", "colher"])
-                    novo_pronto = st.radio("Pronto/Rápido?", ["Não", "Sim"], horizontal=True)
-                    if st.button("Salvar", type="primary") and novo_nome:
+                with st.popover("➕ Adicionar", use_container_width=True):
+                    novo_nome = st.text_input("Qual o alimento?")
+                    nova_qtd = st.number_input("Quantidade", min_value=0.0, step=1.0)
+                    nova_unidade = st.selectbox("Unidade de Medida", ["g", "kg", "ml", "L", "un", "dose", "colher"])
+                    novo_pronto = st.radio("Consumo Rápido?", ["Não", "Sim"], horizontal=True)
+                    if st.button("Guardar no Estoque", type="primary", use_container_width=True) and novo_nome:
                         novo_item = pd.DataFrame({"Alimento": [novo_nome], "Quantidade": [float(nova_qtd)], "Unidade": [nova_unidade], "Pronto/Rápido": [novo_pronto]})
-                        if st.session_state.despensa.empty:
-                            st.session_state.despensa = novo_item
-                        else:
-                            st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
+                        if st.session_state.despensa.empty: st.session_state.despensa = novo_item
+                        else: st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
                         salvar_despensa(st.session_state.despensa, st.session_state.username) 
                         st.rerun()
             with col_rem:
-                with st.popover("🗑️ Deletar", use_container_width=True):
+                with st.popover("🗑️ Remover", use_container_width=True):
                     if not st.session_state.despensa.empty:
                         lista_alimentos = st.session_state.despensa["Alimento"].tolist()
-                        item_remover = st.selectbox("Apagar:", lista_alimentos)
-                        if st.button("Excluir", type="primary"):
+                        item_remover = st.selectbox("O que acabou?", lista_alimentos)
+                        if st.button("Excluir Item", type="primary", use_container_width=True):
                             st.session_state.despensa = st.session_state.despensa[st.session_state.despensa["Alimento"] != item_remover]
                             salvar_despensa(st.session_state.despensa, st.session_state.username)
                             st.rerun()
-                    else: st.write("Estoque vazio.")
+                    else: st.write("Seu estoque está vazio.")
             
-            df_visual = st.session_state.despensa.copy() if not st.session_state.despensa.empty else pd.DataFrame()
-            if not df_visual.empty and 'Quantidade' in df_visual.columns:
-                def formatar_estoque(row): 
-                    try: qtd = float(row.get("Quantidade", 0))
-                    except: qtd = 0
-                    return "❌ ESGOTADO" if qtd <= 0 else f"{qtd} {row.get('Unidade', '')}"
+            st.write("")
+            with st.container(border=True):
+                df_visual = st.session_state.despensa.copy() if not st.session_state.despensa.empty else pd.DataFrame()
+                if not df_visual.empty and 'Quantidade' in df_visual.columns:
+                    def formatar_estoque(row): 
+                        try: qtd = float(row.get("Quantidade", 0))
+                        except: qtd = 0
+                        return "❌ Faltando" if qtd <= 0 else f"{qtd} {row.get('Unidade', '')}"
+                    df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
+                    df_visual.set_index("Alimento", inplace=True)
+                    st.table(df_visual[["Disponível"]])
+                else:
+                    st.info("Sua geladeira está vazia no aplicativo.")
                 
-                df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
-                df_visual.set_index("Alimento", inplace=True)
-                st.table(df_visual[["Disponível"]])
-            else:
-                st.info("Nenhum alimento cadastrado.")
-                
-            # --- LISTA DO MERCADO SEMPRE VISÍVEL ---
-            st.divider()
-            st.markdown("### 📝 Lista do Mercado")
+            st.write("")
+            st.markdown("<h4 class='adapt-text' style='font-weight: 700;'>📝 Lista Inteligente</h4>", unsafe_allow_html=True)
             if not st.session_state.despensa.empty and 'Quantidade' in st.session_state.despensa.columns:
                 qtd_numerica = pd.to_numeric(st.session_state.despensa['Quantidade'], errors='coerce').fillna(0)
                 estoque_zerado = st.session_state.despensa[qtd_numerica <= 0]
                 
                 if not estoque_zerado.empty:
-                    st.warning("⚠️ Você precisa repor:")
                     texto_zap = "🛒 *Lista do Mercado - NutryAi*\n\n"
                     for index, row in estoque_zerado.iterrows(): 
-                        st.write(f"- {row['Alimento']}")
+                        st.markdown(f"<span style='color: var(--text-primary); font-weight: 600;'>• {row['Alimento']}</span>", unsafe_allow_html=True)
                         texto_zap += f"• {row['Alimento']}\n"
                     link_whatsapp = f"https://api.whatsapp.com/send?text={urllib.parse.quote(texto_zap)}"
-                    st.markdown(f'<a href="{link_whatsapp}" target="_blank" style="display:flex; align-items:center; justify-content:center; background:#25D366; color:white; height:45px; border-radius:15px; text-decoration:none; font-weight:bold; margin-top:10px;">🟢 Enviar para WhatsApp</a>', unsafe_allow_html=True)
+                    st.markdown(f'<a href="{link_whatsapp}" target="_blank" class="btn-whatsapp">🟢 Enviar Lista pro Zap</a>', unsafe_allow_html=True)
                 else:
                     st.success("🎉 Tudo abastecido! Não falta nada no seu estoque.")
-            else:
-                st.info("Adicione itens no estoque para o aplicativo monitorar sua lista de compras.")
 
         with tab3:
+            st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🍽️ O Seu Dia</h3>", unsafe_allow_html=True)
             if st.session_state.cardapio_atual is None:
-                if st.button("⚡ Gerar Cardápio de Hoje", use_container_width=True, type="primary"):
-                    if not api_configurada: st.error("⚠️ Configure a chave de API do Gemini nos Secrets.")
-                    else:
-                        with st.spinner("Analisando sua rotina e despensa..."):
-                            df_temp = st.session_state.despensa.copy()
-                            if not df_temp.empty:
-                                df_temp['Quantidade_Num'] = pd.to_numeric(df_temp['Quantidade'], errors='coerce').fillna(0)
-                                despensa_ativa = df_temp[df_temp["Quantidade_Num"] > 0]
-                            else: despensa_ativa = pd.DataFrame()
-                            
-                            prompt = f"""
-                            Nutricionista Clínico. Crie o cardápio real de hoje usando APENAS O ESTOQUE.
-                            BIOMETRIA: {dados_perfil_ia}
-                            AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')}-{trab_fim.strftime('%H:%M')} | Transito {transito_inicio.strftime('%H:%M')}-{transito_fim.strftime('%H:%M')} | Treino {treino_inicio.strftime('%H:%M')}-{treino_fim.strftime('%H:%M')} | Estudo {estudo_inicio.strftime('%H:%M')}-{estudo_fim.strftime('%H:%M')} | Dorme {hora_dormir.strftime('%H:%M')} | Prep. Máx: {tempo_preparo} min.
-                            ESTOQUE: {despensa_ativa.to_dict(orient="records")}
-                            Retorne JSON exato: {{"resumo_diario": {{"calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "ingredientes": "Qtd", "instrucao_preparo": "Instrução", "macros": {{"calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g"}}, "uso_despensa": [{{"nome_exato": "NOME", "qtd_descontada": 150}}]}}]}}
-                            """
-                            try:
-                                resp = modelo.generate_content(prompt).text.strip()
-                                st.session_state.cardapio_atual = json.loads(re.search(r'\{.*\}', resp, re.DOTALL).group(0))
-                                st.rerun()
-                            except Exception as e: st.error(f"Erro na IA: {e}")
+                st.markdown("""
+                <div style='text-align: center; padding: 40px 20px;'>
+                    <h1 style='font-size: 4rem; margin-bottom: 5px; opacity: 0.8;'>🥗</h1>
+                    <h3 class='adapt-text' style='font-weight: 700; margin-bottom: 5px;'>Seu dia em branco</h3>
+                    <p class='sub-text' style='margin-bottom: 25px;'>Aperte o botão para criar um plano sincronizado com o seu estoque e rotina de hoje.</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            if st.button("⚡ Gerar Rota de Hoje", use_container_width=True, type="primary"):
+                if not api_configurada: st.error("⚠️ Inteligência Artificial offline.")
+                else:
+                    with st.spinner("Analisando sua rotina e despensa..."):
+                        df_temp = st.session_state.despensa.copy()
+                        if not df_temp.empty:
+                            df_temp['Quantidade_Num'] = pd.to_numeric(df_temp['Quantidade'], errors='coerce').fillna(0)
+                            despensa_ativa = df_temp[df_temp["Quantidade_Num"] > 0]
+                        else: despensa_ativa = pd.DataFrame()
+                        
+                        prompt = f"""
+                        Nutricionista Clínico. Crie o cardápio real de hoje usando APENAS O ESTOQUE.
+                        BIOMETRIA: {dados_perfil_ia}
+                        AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')}-{trab_fim.strftime('%H:%M')} | Transito {transito_inicio.strftime('%H:%M')}-{transito_fim.strftime('%H:%M')} | Treino {treino_inicio.strftime('%H:%M')}-{treino_fim.strftime('%H:%M')} | Estudo {estudo_inicio.strftime('%H:%M')}-{estudo_fim.strftime('%H:%M')} | Dorme {hora_dormir.strftime('%H:%M')} | Prep. Máx: {tempo_preparo} min.
+                        ESTOQUE: {despensa_ativa.to_dict(orient="records")}
+                        Retorne JSON exato: {{"resumo_diario": {{"calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "ingredientes": "Qtd", "instrucao_preparo": "Instrução", "macros": {{"calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g"}}, "uso_despensa": [{{"nome_exato": "NOME", "qtd_descontada": 150}}]}}]}}
+                        """
+                        try:
+                            resp = modelo.generate_content(prompt).text.strip()
+                            st.session_state.cardapio_atual = json.loads(re.search(r'\{.*\}', resp, re.DOTALL).group(0))
+                            st.rerun()
+                        except Exception as e: st.error(f"Erro na IA: {e}")
 
             if st.session_state.cardapio_atual is not None:
                 resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
@@ -532,26 +620,26 @@ else:
                 pct_carb = min(100, int((cons_carb / tot_carb * 100) if tot_carb > 0 else 0))
                 pct_gord = min(100, int((cons_gord / tot_gord * 100) if tot_gord > 0 else 0))
 
-                st.markdown(f"### 🎯 Gamificação do Dia")
                 with st.container(border=True):
+                    st.markdown("<h4 class='adapt-text' style='font-weight: 700; font-size: 1rem;'>🎯 Meta Diária</h4>", unsafe_allow_html=True)
                     c1, c2, c3, c4 = st.columns(4)
-                    c1.markdown(f"**🔥 Kcal**<br><span style='font-size: 0.8rem; color: #8E8E93;'>{cons_kcal}/{tot_kcal}</span><div class='macro-bar-container'><div class='macro-bar-fill bg-kcal' style='width: {pct_kcal}%;'></div></div>", unsafe_allow_html=True)
-                    c2.markdown(f"**🥩 Prot**<br><span style='font-size: 0.8rem; color: #8E8E93;'>{cons_prot}/{tot_prot}g</span><div class='macro-bar-container'><div class='macro-bar-fill bg-prot' style='width: {pct_prot}%;'></div></div>", unsafe_allow_html=True)
-                    c3.markdown(f"**🌾 Carb**<br><span style='font-size: 0.8rem; color: #8E8E93;'>{cons_carb}/{tot_carb}g</span><div class='macro-bar-container'><div class='macro-bar-fill bg-carb' style='width: {pct_carb}%;'></div></div>", unsafe_allow_html=True)
-                    c4.markdown(f"**🥑 Gord**<br><span style='font-size: 0.8rem; color: #8E8E93;'>{cons_gord}/{tot_gord}g</span><div class='macro-bar-container'><div class='macro-bar-fill bg-gord' style='width: {pct_gord}%;'></div></div>", unsafe_allow_html=True)
+                    c1.markdown(f"<span style='font-size: 0.9rem; font-weight: 600; color: var(--text-primary);'>🔥 Kcal</span><br><span style='font-size: 0.8rem; color: var(--text-secondary);'>{cons_kcal}/{tot_kcal}</span><div class='macro-bar-container'><div class='macro-bar-fill bg-kcal' style='width: {pct_kcal}%;'></div></div>", unsafe_allow_html=True)
+                    c2.markdown(f"<span style='font-size: 0.9rem; font-weight: 600; color: var(--text-primary);'>🥩 Prot</span><br><span style='font-size: 0.8rem; color: var(--text-secondary);'>{cons_prot}/{tot_prot}g</span><div class='macro-bar-container'><div class='macro-bar-fill bg-prot' style='width: {pct_prot}%;'></div></div>", unsafe_allow_html=True)
+                    c3.markdown(f"<span style='font-size: 0.9rem; font-weight: 600; color: var(--text-primary);'>🌾 Carb</span><br><span style='font-size: 0.8rem; color: var(--text-secondary);'>{cons_carb}/{tot_carb}g</span><div class='macro-bar-container'><div class='macro-bar-fill bg-carb' style='width: {pct_carb}%;'></div></div>", unsafe_allow_html=True)
+                    c4.markdown(f"<span style='font-size: 0.9rem; font-weight: 600; color: var(--text-primary);'>🥑 Gord</span><br><span style='font-size: 0.8rem; color: var(--text-secondary);'>{cons_gord}/{tot_gord}g</span><div class='macro-bar-container'><div class='macro-bar-fill bg-gord' style='width: {pct_gord}%;'></div></div>", unsafe_allow_html=True)
 
                 st.write("")
-                st.markdown("### 🗺️ Rota de Hoje")
                 for i, ref in enumerate(refeicoes):
                     id_ref = f"ref_{i}"
                     ja_cons = id_ref in st.session_state.consumidos
                     with st.container(border=True):
-                        c_txt, c_chk = st.columns([4, 1])
+                        c_txt, c_chk = st.columns([4, 1], vertical_alignment="center")
                         with c_txt:
-                            st.markdown(f"**{'🟢' if ja_cons else '⚪'} {ref.get('hora','')} | {ref.get('nome','')}**")
-                            st.write(f"🍽️ {ref.get('ingredientes','')}")
+                            cor_bolinha = "🟢" if ja_cons else "⚪"
+                            st.markdown(f"<span style='font-weight: 700; font-size: 1.1rem; color: var(--text-primary);'>{cor_bolinha} {ref.get('hora','')} • {ref.get('nome','')}</span>", unsafe_allow_html=True)
+                            st.markdown(f"<p style='color: var(--text-primary); margin: 5px 0 0 0;'>🍽️ {ref.get('ingredientes','')}</p>", unsafe_allow_html=True)
                         with c_chk:
-                            if st.checkbox("Baixa", key=f"c_{i}", value=ja_cons, disabled=ja_cons):
+                            if st.checkbox("Baixa", key=f"c_{i}", value=ja_cons, disabled=ja_cons, label_visibility="collapsed"):
                                 st.session_state.consumidos.add(id_ref)
                                 for item in ref.get("uso_despensa", []):
                                     if not st.session_state.despensa.empty:
@@ -564,20 +652,22 @@ else:
                                 st.rerun()
 
         with tab4:
-            st.markdown("### 📈 Sua Evolução")
+            st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>📈 Gráfico de Evolução</h3>", unsafe_allow_html=True)
             historico = perfil_seguro.get("historico_peso", [])
             
-            if historico and isinstance(historico, list):
-                try:
-                    df_hist = pd.DataFrame(historico)
-                    df_hist['data'] = pd.to_datetime(df_hist['data'])
-                    df_hist = df_hist.set_index('data')
-                    st.line_chart(df_hist, y='peso', color="#007AFF")
-                except Exception as e: st.write("Erro ao desenhar gráfico.")
-            else:
-                historico = []
-                st.info("Nenhum peso registrado ainda.")
+            with st.container(border=True):
+                if historico and isinstance(historico, list):
+                    try:
+                        df_hist = pd.DataFrame(historico)
+                        df_hist['data'] = pd.to_datetime(df_hist['data'])
+                        df_hist = df_hist.set_index('data')
+                        st.line_chart(df_hist, y='peso', color="#34C759")
+                    except Exception as e: st.write("Erro ao desenhar gráfico.")
+                else:
+                    historico = []
+                    st.info("Seu gráfico aparecerá aqui após o primeiro registro.")
                 
+            st.write("")
             c_peso, c_btn = st.columns([2, 1], vertical_alignment="bottom")
             with c_peso: novo_registro = st.number_input("Peso de Hoje (kg)", value=p_peso, step=0.5)
             with c_btn:
@@ -586,33 +676,36 @@ else:
                     st.session_state.perfil["historico_peso"] = historico
                     st.session_state.perfil["peso"] = float(novo_registro)
                     salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
-                    st.toast("✅ Peso registrado!")
+                    st.toast("✅ Peso registrado com sucesso!")
                     st.rerun()
 
         with tab5:
+            st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>👑 NutryAi PRO</h3>", unsafe_allow_html=True)
             if not eh_pro:
                 st.markdown("""
-                <div style='text-align: center; padding: 40px 20px; background-color: var(--card-bg); border-radius: 14px; border: 1px solid var(--border-color); margin-top: 10px;'>
-                    <h1 style='font-size: 4rem; margin-bottom: 5px;'>👑</h1>
-                    <h2 class='adapt-text' style='font-weight: 800;'>Recurso Premium</h2>
-                    <p style='color: #8E8E93; margin-bottom: 25px;'>Desbloqueie o Plano Ideal e o Chat ao Vivo com a IA.</p>
+                <div style='text-align: center; padding: 40px 20px;'>
+                    <h1 style='font-size: 4rem; margin-bottom: 10px;'>🌟</h1>
+                    <h2 class='adapt-text' style='font-weight: 800;'>Eleve seus resultados</h2>
+                    <p class='sub-text' style='margin-bottom: 25px;'>Desbloqueie o Plano Padrão Ouro guiado por IA e o Chat ao Vivo com a nossa nutricionista virtual.</p>
                 </div>
                 """, unsafe_allow_html=True)
-                if st.button("🌟 Assinar NutryAi PRO", use_container_width=True, type="primary"):
+                
+                # BOTÃO SIMULADOR VOLTOU! (Enquanto a Stripe avalia)
+                if st.button("Liberar Acesso PRO (Test Drive)", use_container_width=True):
                     st.session_state.perfil["plano"] = "premium"
                     salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                     st.balloons()
                     st.rerun()
             else:
-                st.markdown("### 👩‍⚕️ Plano Padrão Ouro")
-                if st.button("✨ Gerar Plano Ideal", use_container_width=True, type="primary"):
+                if st.button("✨ Gerar Plano Padrão Ouro", use_container_width=True, type="primary"):
                     if not api_configurada: st.error("⚠️ Configure a chave de API.")
                     else:
-                        with st.spinner("Calculando o mapa nutricional para o seu biotipo..."):
+                        with st.spinner("Mapeando seu biotipo de forma clínica..."):
                             prompt_ideal = f"""
                             Nutricionista especialista. Crie um PLANO DE METAS e ESTRUTURAÇÃO DE PRATOS. IGNORAR ESTOQUE.
                             BIOMETRIA: {dados_perfil_ia}
-                            AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')}-{trab_fim.strftime('%H:%M')} | Transito {transito_inicio.strftime('%H:%M')}-{transito_fim.strftime('%H:%M')} | Treino {treino_inicio.strftime('%H:%M')}-{treino_fim.strftime('%H:%M')} | Estudo {estudo_inicio.strftime('%H:%M')}-{estudo_fim.strftime('%H:%M')} | Dorme {hora_dormir.strftime('%H:%M')} | Tempo cozinhar: {tempo_preparo} min.
+                            REGRAS: Carbo Complexo SEMPRE com Proteína/Gordura Boa. Nenhuma salada matinal.
+                            AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Tempo cozinhar: {tempo_preparo} min.
                             Retorne JSON: {{"metas_diarias": {{"calorias": "2000 kcal", "carboidratos": "150g", "proteinas": "140g", "gorduras": "60g", "fibras": "30g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "alvo_macros": "Carbos: 30g | Prot: 25g", "estrutura_prato": "Regra de porções", "sugestoes_flexiveis": "3 opções", "instrucao_clinica": "Explicação clínica"}}]}}
                             """
                             try:
@@ -623,41 +716,48 @@ else:
                                 
                 if st.session_state.cardapio_ideal:
                     metas = st.session_state.cardapio_ideal.get("metas_diarias", {})
-                    c1, c2, c3, c4, c5 = st.columns(5)
-                    c1.metric("🔥 Kcal", metas.get("calorias", "0"))
-                    c2.metric("🌾 Carb", metas.get("carboidratos", "0g"))
-                    c3.metric("🥩 Prot", metas.get("proteinas", "0g"))
-                    c4.metric("🥑 Gord", metas.get("gorduras", "0g"))
-                    c5.metric("🥦 Fibra", metas.get("fibras", "0g"))
-                    st.divider()
+                    st.write("")
+                    with st.container(border=True):
+                        c1, c2, c3, c4, c5 = st.columns(5)
+                        c1.metric("🔥 Kcal", metas.get("calorias", "0"))
+                        c2.metric("🌾 Carb", metas.get("carboidratos", "0g"))
+                        c3.metric("🥩 Prot", metas.get("proteinas", "0g"))
+                        c4.metric("🥑 Gord", metas.get("gorduras", "0g"))
+                        c5.metric("🥦 Fibra", metas.get("fibras", "0g"))
+                        
                     for ref_ideal in st.session_state.cardapio_ideal.get("refeicoes", []):
+                        st.write("")
                         with st.container(border=True):
-                            st.markdown(f"#### ⏰ {ref_ideal.get('hora', '')} - {ref_ideal.get('nome', '')}")
+                            st.markdown(f"<h4 class='adapt-text'>⏰ {ref_ideal.get('hora', '')} • {ref_ideal.get('nome', '')}</h4>", unsafe_allow_html=True)
                             st.caption(f"**🎯 Alvo:** {ref_ideal.get('alvo_macros', '')}")
                             st.markdown(f"**🧩 Montagem:** {ref_ideal.get('estrutura_prato', '')}")
                             st.markdown(f"**💡 Opções:** {ref_ideal.get('sugestoes_flexiveis', '')}")
                             st.info(f"👩‍⚕️ **Clínica:** {ref_ideal.get('instrucao_clinica', '')}")
 
         with tab6:
+            st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>💬 Fale com a Nutri</h3>", unsafe_allow_html=True)
             if not eh_pro:
-                st.warning("🔒 Assine o plano PRO para conversar com a Nutricionista.")
+                st.warning("🔒 Assine o plano PRO para conversar com a Inteligência Artificial ao vivo.")
             else:
-                st.markdown("### 💬 Chat com a Nutri")
-                foto_upload = st.file_uploader("📸 Foto do prato ou rótulo", type=["jpg", "jpeg", "png"])
+                with st.container(border=True):
+                    foto_upload = st.file_uploader("Dúvidas no restaurante a quilo? Envie a foto do seu prato:", type=["jpg", "jpeg", "png"])
+                    
+                st.write("")
                 for msg in st.session_state.chat_history:
                     with st.chat_message(msg["role"]): st.markdown(msg["content"])
-                prompt_chat = st.chat_input("Dúvidas no mercado?")
+                
+                prompt_chat = st.chat_input("Pergunte algo para a IA...")
                 if prompt_chat:
-                    if not api_configurada: st.error("⚠️ Configure a API.")
+                    if not api_configurada: st.error("⚠️ IA Indisponível no momento.")
                     else:
                         st.session_state.chat_history.append({"role": "user", "content": prompt_chat})
                         with st.chat_message("user"):
                             st.markdown(prompt_chat)
-                            if foto_upload: st.image(foto_upload, width=250); st.caption("📷 Foto enviada.")
+                            if foto_upload: st.image(foto_upload, width=250)
                         with st.chat_message("assistant"):
                             with st.spinner("A Nutri está digitando..."):
                                 try:
-                                    conteudo_ia = [f"Você é a NutryAi, Nutricionista Clínica. O paciente tem o seguinte perfil: {dados_perfil_ia}. Seja prestativa, use tom amigável. Avalie impactos na insulina se o paciente perguntar sobre alimentos ou fotos.", prompt_chat]
+                                    conteudo_ia = [f"Você é a NutryAi, Nutricionista Clínica. O paciente tem o seguinte perfil: {dados_perfil_ia}. Avalie impactos na insulina.", prompt_chat]
                                     if foto_upload:
                                         imagem_pil = Image.open(foto_upload)
                                         conteudo_ia.append(imagem_pil)
@@ -667,6 +767,5 @@ else:
                                 except Exception as e: st.error(f"Erro na resposta: {e}")
 
     except Exception as general_error:
-        st.error("🚨 Encontramos uma inconsistência nos seus dados no banco de dados.")
+        st.error("🚨 Inconsistência na interface detectada.")
         st.code(traceback.format_exc())
-        if st.button("Tentar recarregar página"): st.rerun()
