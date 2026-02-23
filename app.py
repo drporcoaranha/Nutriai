@@ -13,6 +13,7 @@ from io import BytesIO
 from PIL import Image
 from supabase import create_client, Client
 import traceback
+import altair as alt # <-- NOVA BIBLIOTECA PARA O GRÁFICO PREMIUM
 
 # Tenta carregar o controlador de cookies de forma segura
 try:
@@ -156,7 +157,7 @@ if "GEMINI_API_KEY" in st.secrets:
         api_configurada = True
     except Exception as e: pass
 
-# --- 6. INICIALIZAÇÃO DE SESSÃO ---
+# --- 6. INICIALIZAÇÃO DE SESSÃO LIMPA ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'username' not in st.session_state: st.session_state.username = None
 if 'nome_usuario' not in st.session_state: st.session_state.nome_usuario = None
@@ -173,24 +174,61 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- 7. UX CSS PREMIUM COM WHITE-LABEL ABSOLUTO ---
+# --- INTERCEPTADOR DO GOOGLE SEGURO ---
+if not st.session_state.logged_in and "code" in st.query_params:
+    st.info("🔄 Conectando com o Google...")
+    codigo_autorizacao = st.query_params["code"]
+    st.query_params.clear() 
+    try:
+        token_url = "https://oauth2.googleapis.com/token"
+        token_data = {"code": codigo_autorizacao, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "redirect_uri": REDIRECT_URI, "grant_type": "authorization_code"}
+        res = requests.post(token_url, data=token_data)
+        if res.status_code == 200:
+            access_token = res.json().get("access_token")
+            user_res = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
+            if user_res.status_code == 200:
+                google_user = user_res.json()
+                username_google = google_user.get("email") 
+                nome_google = google_user.get("given_name", "Usuário") 
+                res_db = supabase.table('users').select('*').eq('username', username_google).execute()
+                if len(res_db.data) == 0:
+                    criar_conta(username_google, nome_google, "google_sso_senha_dummy")
+                    res_db = supabase.table('users').select('*').eq('username', username_google).execute()
+                user_db = res_db.data[0]
+                st.session_state.logged_in = True
+                st.session_state.username = username_google
+                st.session_state.nome_usuario = user_db.get('nome', 'Usuário')
+                st.session_state.perfil = user_db.get("perfil") if isinstance(user_db.get("perfil"), dict) else {}
+                st.session_state.despensa = carregar_despensa(username_google)
+                st.rerun() 
+    except Exception as e: st.error("Falha ao conectar com o Google.")
+
+# --- 7. UX CSS PREMIUM E INJEÇÃO DO ÍCONE APPLE ---
 st.markdown(f"""
+    <link rel="apple-touch-icon" href="https://emojicdn.elk.sh/1f34f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#FFFFFF">
+    
     <style>
     :root {{ --bg-color: #F5F5F7; --card-bg: #FFFFFF; --border-color: #E5E5EA; --input-border: #C7C7CC; --input-bg: #FAFAFA; --text-primary: #1C1C1E; --text-secondary: #8E8E93; --shadow-color: rgba(0, 0, 0, 0.04); --accent-color: #34C759; --accent-gradient: linear-gradient(135deg, #34C759 0%, #32D74B 100%); }}
     @media (prefers-color-scheme: dark) {{ :root {{ --bg-color: #000000; --card-bg: #1C1C1E; --border-color: #2C2C2E; --input-border: #48484A; --input-bg: #2C2C2E; --text-primary: #F2F2F7; --text-secondary: #8E8E93; --shadow-color: rgba(0, 0, 0, 0.5); --accent-color: #30D158; --accent-gradient: linear-gradient(135deg, #30D158 0%, #28CD41 100%); }} }}
     
-    /* 🚨 WHITE-LABEL NUKE: DESTRÓI QUALQUER RASTRO DO STREAMLIT 🚨 */
+    /* 🚨 WHITE-LABEL NUKE 2.0: DESTRÓI TODAS AS BARRAS DO STREAMLIT 🚨 */
+    header {{ visibility: hidden !important; height: 0px !important; display: none !important; }}
+    .stAppHeader {{ visibility: hidden !important; height: 0px !important; display: none !important; }}
+    [data-testid="stHeader"] {{ visibility: hidden !important; height: 0px !important; display: none !important; }}
+    [data-testid="stToolbar"] {{ display: none !important; }}
+    [data-testid="stAppDeployButton"] {{ display: none !important; }}
+    .stDeployButton {{ display: none !important; }}
+    #stDecoration {{ display: none !important; }}
+    .viewerBadge_container__1QSob {{ display: none !important; }}
     [data-testid="stSidebar"] {{ display: none !important; }} 
     [data-testid="collapsedControl"] {{ display: none !important; }} 
-    #MainMenu {{display: none !important; visibility: hidden !important;}} 
-    footer {{display: none !important; visibility: hidden !important;}} 
-    header {{display: none !important; visibility: hidden !important;}}
-    [data-testid="stHeader"] {{display: none !important; visibility: hidden !important;}}
-    [data-testid="stToolbar"] {{display: none !important; visibility: hidden !important;}}
-    .stDeployButton {{display: none !important; visibility: hidden !important;}}
-    .viewerBadge_container__1QSob {{display: none !important; visibility: hidden !important;}}
+    #MainMenu {{ display: none !important; }} 
+    footer {{ display: none !important; }} 
     
-    .block-container {{ padding-top: 2rem; padding-bottom: 5rem; max-width: 600px !important; margin: 0 auto !important; }}
+    .block-container {{ padding-top: 1rem !important; padding-bottom: 5rem; max-width: 600px !important; margin: 0 auto !important; }}
     .stApp {{ background-color: var(--bg-color) !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Helvetica, Arial, sans-serif !important; }}
     div[data-testid="stVerticalBlockBorderWrapper"] > div {{ background-color: var(--card-bg) !important; border-radius: 20px !important; border: 1px solid var(--border-color) !important; box-shadow: 0px 8px 24px var(--shadow-color) !important; padding: 20px !important; }}
     div[data-baseweb="input"] > div, div[data-baseweb="select"] > div {{ border: 1.5px solid var(--input-border) !important; background-color: var(--input-bg) !important; border-radius: 12px !important; }}
@@ -262,35 +300,6 @@ if not st.session_state.logged_in:
                 if st.button("Criar Conta", use_container_width=True):
                     if criar_conta(cad_user, cad_nome, cad_senha): st.success("Conta criada! Feche essa aba e faça o login acima.")
                     else: st.error("Usuário já existe no sistema.")
-
-    # INTERCEPTADOR GOOGLE
-    elif "code" in st.query_params:
-        st.info("🔄 Conectando com o Google...")
-        codigo_autorizacao = st.query_params["code"]
-        st.query_params.clear() 
-        try:
-            token_url = "https://oauth2.googleapis.com/token"
-            token_data = {"code": codigo_autorizacao, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "redirect_uri": REDIRECT_URI, "grant_type": "authorization_code"}
-            res = requests.post(token_url, data=token_data)
-            if res.status_code == 200:
-                access_token = res.json().get("access_token")
-                user_res = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
-                if user_res.status_code == 200:
-                    google_user = user_res.json()
-                    username_google = google_user.get("email") 
-                    nome_google = google_user.get("given_name", "Usuário") 
-                    res_db = supabase.table('users').select('*').eq('username', username_google).execute()
-                    if len(res_db.data) == 0:
-                        criar_conta(username_google, nome_google, "google_sso_senha_dummy")
-                        res_db = supabase.table('users').select('*').eq('username', username_google).execute()
-                    user_db = res_db.data[0]
-                    st.session_state.logged_in = True
-                    st.session_state.username = username_google
-                    st.session_state.nome_usuario = user_db.get('nome', 'Usuário')
-                    st.session_state.perfil = user_db.get("perfil") if isinstance(user_db.get("perfil"), dict) else {}
-                    st.session_state.despensa = carregar_despensa(username_google)
-                    st.rerun() 
-        except Exception as e: st.error("Falha ao conectar com o Google.")
 
 # ==========================================
 # MÓDULO 2: O APLICATIVO (LOGADO E ESTÁVEL)
@@ -745,16 +754,27 @@ else:
         historico = perfil_seguro.get("historico_peso", [])
         
         with st.container(border=True):
-            if historico and isinstance(historico, list):
+            if historico and isinstance(historico, list) and len(historico) > 0:
                 try:
+                    # 🚨 GRÁFICO ALTAIR PREMIUM: Estilo Apple Health 🚨
                     df_hist = pd.DataFrame(historico)
                     df_hist['data'] = pd.to_datetime(df_hist['data'])
-                    df_hist = df_hist.set_index('data')
-                    st.line_chart(df_hist, y='peso', color="#34C759")
-                except Exception as e: st.write("Erro ao desenhar gráfico.")
+                    
+                    chart = alt.Chart(df_hist).mark_line(
+                        point=alt.OverlayMarkDef(filled=True, size=100, color="#34C759"),
+                        color="#34C759",
+                        strokeWidth=4
+                    ).encode(
+                        x=alt.X('data:T', axis=alt.Axis(title='', grid=False, format='%d/%m')),
+                        y=alt.Y('peso:Q', scale=alt.Scale(zero=False, padding=1), axis=alt.Axis(title='Peso (kg)', grid=True, tickCount=5)),
+                        tooltip=[alt.Tooltip('data:T', title='Data', format='%d/%m/%Y'), alt.Tooltip('peso:Q', title='Peso')]
+                    ).properties(height=280)
+                    
+                    st.altair_chart(chart, use_container_width=True)
+                except Exception as e: 
+                    st.write("Erro ao desenhar gráfico.")
             else:
-                historico = []
-                st.info("Seu gráfico aparecerá aqui após o primeiro registro.")
+                st.info("Seu gráfico aparecerá aqui após o primeiro registro de peso.")
             
         st.write("")
         c_peso, c_btn = st.columns([2, 1], vertical_alignment="bottom")
@@ -782,10 +802,8 @@ else:
             
             if st.button("Liberar Acesso PRO (Test Drive)", use_container_width=True):
                 st.session_state.perfil["plano"] = "premium"
-                st.session_state.perfil["data_assinatura"] = hoje_str
                 salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                 st.balloons()
-                time.sleep(1)
                 st.rerun()
         else:
             if st.button("✨ Gerar Plano Padrão Ouro", use_container_width=True, type="primary"):
