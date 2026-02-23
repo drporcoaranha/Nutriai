@@ -163,7 +163,7 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- INTERCEPTADOR DO GOOGLE ---
+# --- INTERCEPTADOR DO GOOGLE SEGURO ---
 if not st.session_state.logged_in and "code" in st.query_params:
     st.info("🔄 Conectando com o Google...")
     codigo_autorizacao = st.query_params["code"]
@@ -310,6 +310,25 @@ else:
                 st.rerun() 
         else: 
             st.write("Seu estoque já está vazio.")
+            
+    # 🚨 NOVO MODAL: INSTALAR APP (PWA) 🚨
+    @st.dialog("📱 Como Instalar o App")
+    def modal_instalar_app():
+        st.markdown("""
+        O NutryAi pode ficar salvo na tela inicial do seu celular, igual aos seus outros aplicativos!
+        
+        **🍎 No iPhone (Safari):**
+        1. Toque no ícone de **Compartilhar** (o quadrado com a setinha para cima no rodapé do navegador).
+        2. Role um pouco para baixo e selecione **"Adicionar à Tela de Início"** (Add to Home Screen).
+        3. Confirme clicando em **"Adicionar"**.
+
+        **🤖 No Android (Chrome):**
+        1. Toque nos **3 pontinhos** no canto superior direito do navegador.
+        2. Selecione **"Adicionar à tela inicial"** ou **"Instalar aplicativo"**.
+        3. Confirme e pronto!
+        
+        Da próxima vez, basta clicar no ícone da Maçã Verde 🍏 direto no seu celular para abrir o app em tela cheia!
+        """)
 
     perfil_seguro = st.session_state.perfil if isinstance(st.session_state.perfil, dict) else {}
     p_idade = safe_int(perfil_seguro.get("idade"), 30)
@@ -362,7 +381,9 @@ else:
         
     with col_profile:
         with st.popover("⚙️ Ajustes", use_container_width=True):
-            tab_dados, tab_bio = st.tabs(["👤 Dados", "⚖️ Bio"])
+            # 🚨 NOVA ABA: ASSINATURA E PWA 🚨
+            tab_dados, tab_bio, tab_plan = st.tabs(["👤 Dados", "⚖️ Bio", "💳 Plano"])
+            
             with tab_dados:
                 st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
                 if foto_salva: st.markdown(f'<img src="data:image/jpeg;base64,{foto_salva}" width="80" height="80" style="border-radius:50%; object-fit:cover; margin-bottom:15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">', unsafe_allow_html=True)
@@ -383,6 +404,42 @@ else:
                 try: idx_atv = atividades.index(p_atv)
                 except: idx_atv = 2
                 nova_atv = st.selectbox("Nível de Atividade", atividades, index=idx_atv)
+                
+            with tab_plan:
+                if eh_pro:
+                    st.markdown("<h4 class='adapt-text' style='margin-bottom:0;'>👑 NutryAi PRO</h4>", unsafe_allow_html=True)
+                    st.success("Sua assinatura está ativa e funcionando perfeitamente.")
+                    
+                    data_ass = perfil_seguro.get("data_assinatura")
+                    if not data_ass:
+                        data_ass = hoje_str
+                        st.session_state.perfil["data_assinatura"] = data_ass
+                    try:
+                        data_ass_dt = datetime.strptime(data_ass, "%Y-%m-%d").date()
+                        vencimento = (data_ass_dt + timedelta(days=30)).strftime("%d/%m/%Y")
+                    except:
+                        vencimento = "Data não disponível"
+                        
+                    st.markdown(f"**Próxima Renovação:** {vencimento}")
+                    st.markdown("**Status:** Renovação Automática (Stripe)")
+                    if st.button("Gerenciar Assinatura", use_container_width=True):
+                        st.toast("O painel da Stripe será conectado aqui em breve.")
+                else:
+                    st.markdown("<h4 class='adapt-text' style='margin-bottom:0;'>🍏 Plano Básico</h4>", unsafe_allow_html=True)
+                    st.info("Você está usando a versão gratuita. Suas funções são limitadas.")
+                    if st.button("🌟 Fazer Upgrade", type="primary", use_container_width=True):
+                        st.session_state.perfil["plano"] = "premium"
+                        st.session_state.perfil["data_assinatura"] = hoje_str
+                        salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                        st.balloons()
+                        time.sleep(1)
+                        st.rerun()
+                
+                st.divider()
+                st.markdown("<h4 class='adapt-text' style='margin-bottom:5px;'>📱 App de Celular</h4>", unsafe_allow_html=True)
+                st.caption("Salve o NutryAi direto na sua tela inicial para não precisar abrir o navegador:")
+                if st.button("Como Instalar o App?", use_container_width=True):
+                    modal_instalar_app()
             
             st.write("")
             if st.button("💾 Salvar Perfil", type="primary", use_container_width=True):
@@ -637,11 +694,8 @@ else:
                                 st.markdown(f"<span style='font-weight: 700; font-size: 1.1rem; color: var(--text-primary);'>{cor_bolinha} {ref.get('hora','')} • {ref.get('nome','')}</span>", unsafe_allow_html=True)
                                 st.markdown(f"<p style='color: var(--text-primary); margin: 5px 0 0 0;'>🍽️ {ref.get('ingredientes','')}</p>", unsafe_allow_html=True)
                             with c_chk:
-                                # 🚨 SOLUÇÃO DO LOOP INFINITO (CONGELAMENTO DE TELA) 🚨
                                 foi_marcado = st.checkbox("Baixa", key=f"chk_meal_{i}_{hoje_str}", value=ja_cons, disabled=ja_cons, label_visibility="collapsed")
                                 
-                                # Só executa a rotina de salvar e atualizar se o usuário ACABOU de marcar. 
-                                # Se já estava marcado (ja_cons = True), ele ignora e não entra no loop infinito!
                                 if foi_marcado and not ja_cons:
                                     st.session_state.consumidos.add(id_ref)
                                     
@@ -667,7 +721,7 @@ else:
                                     st.rerun()
 
             except Exception as e:
-                st.error("A Inteligência Artificial estruturou mal o seu cardápio. Clique em 'Limpar Tudo' no topo da página para recriar.")
+                st.error("A Inteligência Artificial estruturou mal o seu cardápio, mas o aplicativo bloqueou a falha. Clique em 'Limpar Tudo' no topo da página para recriar.")
 
     with tab4:
         st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>📈 Gráfico de Evolução</h3>", unsafe_allow_html=True)
