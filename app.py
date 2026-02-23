@@ -157,7 +157,7 @@ if "GEMINI_API_KEY" in st.secrets:
 
 # --- 6. INICIALIZAÇÃO DE SESSÃO E COOKIES BLINDADA ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
-if 'intencao_logout' not in st.session_state: st.session_state.intencao_logout = False # Impede o fantasma do auto-login
+if 'intencao_logout' not in st.session_state: st.session_state.intencao_logout = False 
 if 'username' not in st.session_state: st.session_state.username = None
 if 'nome_usuario' not in st.session_state: st.session_state.nome_usuario = None
 if 'perfil' not in st.session_state: st.session_state.perfil = {}
@@ -168,9 +168,9 @@ if 'consumidos' not in st.session_state: st.session_state.consumidos = set()
 if 'chat_history' not in st.session_state: st.session_state.chat_history = []
 if 'sessao_iniciada' not in st.session_state: st.session_state.sessao_iniciada = False
 
-# VERIFICAÇÃO DE LOGIN AUTOMÁTICO (Só roda se NÃO houver intenção de sair)
+# VERIFICAÇÃO DE LOGIN AUTOMÁTICO
 if cookies_enabled and not st.session_state.logged_in and "code" not in st.query_params and not st.session_state.intencao_logout:
-    time.sleep(0.1) # Buffer de estabilidade
+    time.sleep(0.1) 
     saved_user = cookie_controller.get("nutriai_auth_user")
     if saved_user and saved_user != "":
         res_db = supabase.table('users').select('*').eq('username', saved_user).execute()
@@ -184,9 +184,9 @@ if cookies_enabled and not st.session_state.logged_in and "code" not in st.query
             st.rerun()
 
 def fazer_logout():
-    st.session_state.intencao_logout = True # Bloqueia o Cookie de agir nesta sessão
+    st.session_state.intencao_logout = True 
     if cookies_enabled: 
-        cookie_controller.set("nutriai_auth_user", "", max_age=0) # Aniquila o cookie
+        cookie_controller.set("nutriai_auth_user", "", max_age=0) 
         time.sleep(0.2)
         
     st.session_state.logged_in = False
@@ -200,11 +200,11 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- INTERCEPTADOR DO GOOGLE (À PROVA DE FALHAS) ---
+# --- INTERCEPTADOR DO GOOGLE ---
 if not st.session_state.logged_in and "code" in st.query_params:
     st.info("🔄 Conectando com o Google...")
     codigo_autorizacao = st.query_params["code"]
-    st.query_params.clear() # Limpa a URL na hora para evitar leitura dupla!
+    st.query_params.clear() 
     
     try:
         token_url = "https://oauth2.googleapis.com/token"
@@ -226,7 +226,7 @@ if not st.session_state.logged_in and "code" in st.query_params:
                         res_db = supabase.table('users').select('*').eq('username', username_google).execute()
                     
                     user_db = res_db.data[0]
-                    st.session_state.intencao_logout = False # Reseta a intenção
+                    st.session_state.intencao_logout = False 
                     st.session_state.logged_in = True
                     st.session_state.username = username_google
                     st.session_state.nome_usuario = user_db.get('nome', 'Usuário')
@@ -278,52 +278,55 @@ st.markdown(f"""
 # MÓDULO 1: TELA DE LOGIN
 # ==========================================
 if not st.session_state.logged_in:
-    st.markdown("""
-        <div class="brand-container">
-            <div class="brand-icon-box"><span class="brand-icon">🍏</span></div>
-            <h1 class="brand-text">NutryAi</h1>
-            <p class="sub-text" style="margin-top: 8px;">Sua inteligência nutricional.</p>
-        </div>
-    """, unsafe_allow_html=True)
+    
+    if "code" not in st.query_params:
+        with st.container():
+            st.markdown("""
+                <div class="brand-container">
+                    <div class="brand-icon-box"><span class="brand-icon">🍏</span></div>
+                    <h1 class="brand-text">NutryAi</h1>
+                    <p class="sub-text" style="margin-top: 8px;">Sua inteligência nutricional.</p>
+                </div>
+            """, unsafe_allow_html=True)
 
-    with st.container(border=True):
-        st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse sua conta</h4>", unsafe_allow_html=True)
-        login_user = st.text_input("Usuário", placeholder="Ex: pablo", label_visibility="collapsed")
-        login_senha = st.text_input("Senha", type="password", placeholder="Sua senha secreta", label_visibility="collapsed")
-        
-        lembrar_me = st.checkbox("Mantenha-me conectado", value=True)
-        
-        if st.button("Entrar no App", use_container_width=True, type="primary"):
-            if login_user and login_senha:
-                with st.spinner("🔄 Conectando aos servidores seguros..."):
-                    dados_usuario = validar_login(login_user, login_senha)
-                    if dados_usuario:
-                        st.session_state.intencao_logout = False # Reseta a intenção
-                        st.session_state.logged_in = True
-                        st.session_state.username = login_user
-                        st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
-                        perfil_carregado = dados_usuario.get("perfil")
-                        st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
-                        st.session_state.despensa = carregar_despensa(login_user)
-                        
-                        if lembrar_me and cookies_enabled:
-                            cookie_controller.set("nutriai_auth_user", login_user, max_age=30*86400)
-                            time.sleep(0.5)
-                        st.rerun()
-                    else: st.error("Usuário ou senha incorretos.")
-            else: st.warning("Preencha todos os campos.")
+            with st.container(border=True):
+                st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse sua conta</h4>", unsafe_allow_html=True)
+                login_user = st.text_input("Usuário", placeholder="Ex: pablo", label_visibility="collapsed")
+                login_senha = st.text_input("Senha", type="password", placeholder="Sua senha secreta", label_visibility="collapsed")
                 
-        st.markdown("<div style='text-align: center; margin: 5px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
-        if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
+                lembrar_me = st.checkbox("Mantenha-me conectado", value=True)
+                
+                if st.button("Entrar no App", use_container_width=True, type="primary"):
+                    if login_user and login_senha:
+                        with st.spinner("🔄 Conectando aos servidores seguros..."):
+                            dados_usuario = validar_login(login_user, login_senha)
+                            if dados_usuario:
+                                st.session_state.intencao_logout = False 
+                                st.session_state.logged_in = True
+                                st.session_state.username = login_user
+                                st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
+                                perfil_carregado = dados_usuario.get("perfil")
+                                st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
+                                st.session_state.despensa = carregar_despensa(login_user)
+                                
+                                if lembrar_me and cookies_enabled:
+                                    cookie_controller.set("nutriai_auth_user", login_user, max_age=30*86400)
+                                    time.sleep(0.5)
+                                st.rerun()
+                            else: st.error("Usuário ou senha incorretos.")
+                    else: st.warning("Preencha todos os campos.")
+                        
+                st.markdown("<div style='text-align: center; margin: 5px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
+                if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
 
-    st.write("")
-    with st.expander("Não tem uma conta? Clique aqui para criar"):
-        cad_nome = st.text_input("Como quer ser chamado?")
-        cad_user = st.text_input("Nome de usuário (ex: pablo)").lower()
-        cad_senha = st.text_input("Crie uma senha", type="password")
-        if st.button("Criar Conta", use_container_width=True):
-            if criar_conta(cad_user, cad_nome, cad_senha): st.success("Conta criada! Feche essa aba e faça o login acima.")
-            else: st.error("Usuário já existe no sistema.")
+            st.write("")
+            with st.expander("Não tem uma conta? Clique aqui para criar"):
+                cad_nome = st.text_input("Como quer ser chamado?")
+                cad_user = st.text_input("Nome de usuário (ex: pablo)").lower()
+                cad_senha = st.text_input("Crie uma senha", type="password")
+                if st.button("Criar Conta", use_container_width=True):
+                    if criar_conta(cad_user, cad_nome, cad_senha): st.success("Conta criada! Feche essa aba e faça o login acima.")
+                    else: st.error("Usuário já existe no sistema.")
 
 # ==========================================
 # MÓDULO 2: O APLICATIVO (LOGADO E ISOLADO)
@@ -812,6 +815,6 @@ else:
                                     st.session_state.chat_history.append({"role": "assistant", "content": resposta_chat.text})
                                 except Exception as e: st.error(f"Erro na resposta: {e}")
 
-        except Exception as general_error:
-            st.error("🚨 Inconsistência na interface detectada.")
-            st.code(traceback.format_exc())
+    except Exception as general_error:
+        st.error("🚨 Inconsistência na interface detectada.")
+        st.code(traceback.format_exc())
