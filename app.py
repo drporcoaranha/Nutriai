@@ -187,7 +187,7 @@ if not st.session_state.logged_in and "code" in st.query_params:
         else: st.query_params.clear()
     except Exception as e: pass
 
-# --- 7. UX 8.2: CSS PREMIUM COM LAYOUT ESTÁVEL ---
+# --- 7. UX 8.3: CSS PREMIUM + GRÁFICO FLUÍDO ---
 st.markdown(f"""
     <style>
     :root {{ 
@@ -217,12 +217,10 @@ st.markdown(f"""
         }}
     }}
 
-    /* Limpeza Nativa */
     [data-testid="stSidebar"] {{ display: none !important; }}
     [data-testid="collapsedControl"] {{ display: none !important; }}
     #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
     
-    /* Previne a quebra do layout limitando a largura central */
     .block-container {{
         padding-top: 2rem; 
         padding-bottom: 5rem; 
@@ -232,7 +230,6 @@ st.markdown(f"""
     
     .stApp {{ background-color: var(--bg-color) !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Helvetica, Arial, sans-serif !important; }}
     
-    /* Cartões Modernos */
     div[data-testid="stVerticalBlockBorderWrapper"] > div {{
         background-color: var(--card-bg) !important; 
         border-radius: 20px !important; 
@@ -241,7 +238,6 @@ st.markdown(f"""
         padding: 20px !important;
     }}
     
-    /* Campos de Entrada Alto Contraste */
     div[data-baseweb="input"] > div, 
     div[data-baseweb="select"] > div {{
         border: 1.5px solid var(--input-border) !important;
@@ -255,7 +251,6 @@ st.markdown(f"""
     }}
     input {{ color: var(--text-primary) !important; font-size: 16px !important; padding: 12px 14px !important; }}
     
-    /* Botões */
     div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{
         border-radius: 16px !important; 
         height: 50px !important; 
@@ -271,7 +266,6 @@ st.markdown(f"""
         border: none !important; 
     }}
     
-    /* 🚨 ABAS CORRIGIDAS: Removido o display flex que quebrava a tela 🚨 */
     div[data-testid="stTabs"] > div:first-child {{
         background-color: var(--bg-color); 
         padding-top: 10px; 
@@ -298,7 +292,6 @@ st.markdown(f"""
         font-size: 1.2rem !important; margin: 0 !important; padding: 0 !important;
     }}
 
-    /* Estilos Adicionais */
     .btn-google-nativo {{ display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1.5px solid var(--input-border); border-radius: 16px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; box-shadow: 0 2px 8px var(--shadow-color); }}
     .btn-pro {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: #000 !important; border-radius: 16px; height: 55px; font-weight: 800; font-size: 18px; border: none; width: 100%; text-decoration: none; }}
     .btn-whatsapp {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #30D158 0%, #28CD41 100%); color: #FFF !important; border-radius: 16px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; margin-top: 15px; }}
@@ -315,6 +308,12 @@ st.markdown(f"""
     .bg-carb {{ background: linear-gradient(90deg, #007AFF, #5AC8FA); }} 
     .bg-gord {{ background: linear-gradient(90deg, #AF52DE, #FF2D55); }}
     
+    /* 🚨 A SOLUÇÃO DO GRÁFICO (Remove o sequestro do toque na tela) 🚨 */
+    [data-testid="stArrowVegaLiteChart"] {{
+        pointer-events: none !important; 
+        touch-action: none !important;
+    }}
+
     .adapt-text {{ color: var(--text-primary) !important; }}
     .sub-text {{ color: var(--text-secondary) !important; font-size: 0.95rem; }}
     
@@ -667,7 +666,7 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # BOTÃO SIMULADOR
+                # BOTÃO SIMULADOR VOLTOU!
                 if st.button("Liberar Acesso PRO (Test Drive)", use_container_width=True):
                     st.session_state.perfil["plano"] = "premium"
                     salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
