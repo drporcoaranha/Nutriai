@@ -14,9 +14,19 @@ from PIL import Image
 from supabase import create_client, Client
 import traceback
 
+# Tenta carregar o controlador de cookies de forma segura
+try:
+    from streamlit_cookies_controller import CookieController
+    cookies_enabled = True
+except ImportError:
+    cookies_enabled = False
+
 # --- 1. CONFIGURAÇÃO ---
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered", initial_sidebar_state="collapsed") 
 fuso_local = timezone(timedelta(hours=-3))
+
+if cookies_enabled:
+    cookie_controller = CookieController()
 
 # --- 2. CONEXÃO COM O SUPABASE ---
 try:
@@ -146,7 +156,7 @@ if "GEMINI_API_KEY" in st.secrets:
         api_configurada = True
     except Exception as e: pass
 
-# --- 6. INICIALIZAÇÃO DE SESSÃO LIMPA ---
+# --- 6. INICIALIZAÇÃO DE SESSÃO ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'username' not in st.session_state: st.session_state.username = None
 if 'nome_usuario' not in st.session_state: st.session_state.nome_usuario = None
@@ -163,41 +173,23 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- INTERCEPTADOR DO GOOGLE SEGURO ---
-if not st.session_state.logged_in and "code" in st.query_params:
-    st.info("🔄 Conectando com o Google...")
-    codigo_autorizacao = st.query_params["code"]
-    st.query_params.clear() 
-    try:
-        token_url = "https://oauth2.googleapis.com/token"
-        token_data = {"code": codigo_autorizacao, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "redirect_uri": REDIRECT_URI, "grant_type": "authorization_code"}
-        res = requests.post(token_url, data=token_data)
-        if res.status_code == 200:
-            access_token = res.json().get("access_token")
-            user_res = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
-            if user_res.status_code == 200:
-                google_user = user_res.json()
-                username_google = google_user.get("email") 
-                nome_google = google_user.get("given_name", "Usuário") 
-                res_db = supabase.table('users').select('*').eq('username', username_google).execute()
-                if len(res_db.data) == 0:
-                    criar_conta(username_google, nome_google, "google_sso_senha_dummy")
-                    res_db = supabase.table('users').select('*').eq('username', username_google).execute()
-                user_db = res_db.data[0]
-                st.session_state.logged_in = True
-                st.session_state.username = username_google
-                st.session_state.nome_usuario = user_db.get('nome', 'Usuário')
-                st.session_state.perfil = user_db.get("perfil") if isinstance(user_db.get("perfil"), dict) else {}
-                st.session_state.despensa = carregar_despensa(username_google)
-                st.rerun() 
-    except Exception as e: st.error("Falha ao conectar com o Google.")
-
-# --- 7. UX CSS PREMIUM ---
+# --- 7. UX CSS PREMIUM COM WHITE-LABEL ABSOLUTO ---
 st.markdown(f"""
     <style>
     :root {{ --bg-color: #F5F5F7; --card-bg: #FFFFFF; --border-color: #E5E5EA; --input-border: #C7C7CC; --input-bg: #FAFAFA; --text-primary: #1C1C1E; --text-secondary: #8E8E93; --shadow-color: rgba(0, 0, 0, 0.04); --accent-color: #34C759; --accent-gradient: linear-gradient(135deg, #34C759 0%, #32D74B 100%); }}
     @media (prefers-color-scheme: dark) {{ :root {{ --bg-color: #000000; --card-bg: #1C1C1E; --border-color: #2C2C2E; --input-border: #48484A; --input-bg: #2C2C2E; --text-primary: #F2F2F7; --text-secondary: #8E8E93; --shadow-color: rgba(0, 0, 0, 0.5); --accent-color: #30D158; --accent-gradient: linear-gradient(135deg, #30D158 0%, #28CD41 100%); }} }}
-    [data-testid="stSidebar"] {{ display: none !important; }} [data-testid="collapsedControl"] {{ display: none !important; }} #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
+    
+    /* 🚨 WHITE-LABEL NUKE: DESTRÓI QUALQUER RASTRO DO STREAMLIT 🚨 */
+    [data-testid="stSidebar"] {{ display: none !important; }} 
+    [data-testid="collapsedControl"] {{ display: none !important; }} 
+    #MainMenu {{display: none !important; visibility: hidden !important;}} 
+    footer {{display: none !important; visibility: hidden !important;}} 
+    header {{display: none !important; visibility: hidden !important;}}
+    [data-testid="stHeader"] {{display: none !important; visibility: hidden !important;}}
+    [data-testid="stToolbar"] {{display: none !important; visibility: hidden !important;}}
+    .stDeployButton {{display: none !important; visibility: hidden !important;}}
+    .viewerBadge_container__1QSob {{display: none !important; visibility: hidden !important;}}
+    
     .block-container {{ padding-top: 2rem; padding-bottom: 5rem; max-width: 600px !important; margin: 0 auto !important; }}
     .stApp {{ background-color: var(--bg-color) !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Helvetica, Arial, sans-serif !important; }}
     div[data-testid="stVerticalBlockBorderWrapper"] > div {{ background-color: var(--card-bg) !important; border-radius: 20px !important; border: 1px solid var(--border-color) !important; box-shadow: 0px 8px 24px var(--shadow-color) !important; padding: 20px !important; }}
@@ -271,6 +263,35 @@ if not st.session_state.logged_in:
                     if criar_conta(cad_user, cad_nome, cad_senha): st.success("Conta criada! Feche essa aba e faça o login acima.")
                     else: st.error("Usuário já existe no sistema.")
 
+    # INTERCEPTADOR GOOGLE
+    elif "code" in st.query_params:
+        st.info("🔄 Conectando com o Google...")
+        codigo_autorizacao = st.query_params["code"]
+        st.query_params.clear() 
+        try:
+            token_url = "https://oauth2.googleapis.com/token"
+            token_data = {"code": codigo_autorizacao, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "redirect_uri": REDIRECT_URI, "grant_type": "authorization_code"}
+            res = requests.post(token_url, data=token_data)
+            if res.status_code == 200:
+                access_token = res.json().get("access_token")
+                user_res = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
+                if user_res.status_code == 200:
+                    google_user = user_res.json()
+                    username_google = google_user.get("email") 
+                    nome_google = google_user.get("given_name", "Usuário") 
+                    res_db = supabase.table('users').select('*').eq('username', username_google).execute()
+                    if len(res_db.data) == 0:
+                        criar_conta(username_google, nome_google, "google_sso_senha_dummy")
+                        res_db = supabase.table('users').select('*').eq('username', username_google).execute()
+                    user_db = res_db.data[0]
+                    st.session_state.logged_in = True
+                    st.session_state.username = username_google
+                    st.session_state.nome_usuario = user_db.get('nome', 'Usuário')
+                    st.session_state.perfil = user_db.get("perfil") if isinstance(user_db.get("perfil"), dict) else {}
+                    st.session_state.despensa = carregar_despensa(username_google)
+                    st.rerun() 
+        except Exception as e: st.error("Falha ao conectar com o Google.")
+
 # ==========================================
 # MÓDULO 2: O APLICATIVO (LOGADO E ESTÁVEL)
 # ==========================================
@@ -311,7 +332,6 @@ else:
         else: 
             st.write("Seu estoque já está vazio.")
             
-    # 🚨 NOVO MODAL: INSTALAR APP (PWA) 🚨
     @st.dialog("📱 Como Instalar o App")
     def modal_instalar_app():
         st.markdown("""
@@ -381,7 +401,6 @@ else:
         
     with col_profile:
         with st.popover("⚙️ Ajustes", use_container_width=True):
-            # 🚨 NOVA ABA: ASSINATURA E PWA 🚨
             tab_dados, tab_bio, tab_plan = st.tabs(["👤 Dados", "⚖️ Bio", "💳 Plano"])
             
             with tab_dados:
@@ -545,7 +564,6 @@ else:
                 st.success("🎉 Tudo abastecido! Não falta nada no seu estoque.")
 
     with tab3:
-        # 🚨 BOTÃO DE PÂNICO ISOLADO NO TOPO 🚨
         if st.session_state.cardapio_atual is not None:
             c1, c2 = st.columns([2.5, 1], vertical_alignment="center")
             c1.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 0;'>🍽️ Plano Alimentar IA</h3>", unsafe_allow_html=True)
@@ -642,7 +660,6 @@ else:
                                 salvar_despensa(st.session_state.despensa, st.session_state.username) 
                                 st.rerun()
 
-        # 🚨 BLINDAGEM DA RENDERIZAÇÃO 🚨
         if st.session_state.cardapio_atual is not None:
             try:
                 resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
@@ -721,7 +738,7 @@ else:
                                     st.rerun()
 
             except Exception as e:
-                st.error("A Inteligência Artificial estruturou mal o seu cardápio, mas o aplicativo bloqueou a falha. Clique em 'Limpar Tudo' no topo da página para recriar.")
+                st.error("A Inteligência Artificial estruturou mal o seu cardápio. Clique em 'Limpar Tudo' no topo da página para recriar.")
 
     with tab4:
         st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>📈 Gráfico de Evolução</h3>", unsafe_allow_html=True)
@@ -765,8 +782,10 @@ else:
             
             if st.button("Liberar Acesso PRO (Test Drive)", use_container_width=True):
                 st.session_state.perfil["plano"] = "premium"
+                st.session_state.perfil["data_assinatura"] = hoje_str
                 salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                 st.balloons()
+                time.sleep(1)
                 st.rerun()
         else:
             if st.button("✨ Gerar Plano Padrão Ouro", use_container_width=True, type="primary"):
