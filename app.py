@@ -134,7 +134,8 @@ api_configurada = False
 if "GEMINI_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        modelo = genai.GenerativeModel('gemini-1.5-flash') 
+        # Retornado para a versão 2.5 flash, que estava funcionando!
+        modelo = genai.GenerativeModel('gemini-2.5-flash') 
         api_configurada = True
     except Exception as e: pass
 
@@ -225,7 +226,17 @@ st.markdown(f"""
     .btn-google-nativo {{
         display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 20px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease-in-out; box-shadow: 0 1px 3px var(--shadow-color);
     }}
-    
+    .btn-google-nativo:hover {{ opacity: 0.8; transform: scale(0.98); }}
+
+    .btn-pro {{
+        display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); color: #000 !important; border-radius: 20px; height: 55px; font-weight: 800; font-size: 18px; border: none; width: 100%; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.3);
+    }}
+
+    .btn-whatsapp {{
+        display: flex; align-items: center; justify-content: center; background-color: #25D366; color: #FFFFFF !important; border-radius: 20px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease-in-out; margin-top: 15px; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.2);
+    }}
+    .btn-whatsapp:hover {{ background-color: #128C7E; transform: scale(0.98); }}
+
     table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; }}
     th {{ color: #8E8E93 !important; font-weight: 600 !important; border-bottom: 1px solid var(--border-color) !important; text-align: left !important; padding-bottom: 8px !important; }}
     td, th {{ padding: 12px 8px !important; border-bottom: 1px solid var(--border-color) !important; border-top: none !important; border-left: none !important; border-right: none !important; color: var(--text-primary) !important; }}
@@ -261,7 +272,6 @@ if not st.session_state.logged_in:
         
         if st.button("Entrar", use_container_width=True, type="primary"):
             if login_user and login_senha:
-                # UX: SPINNER DE CARREGAMENTO ADICIONADO AQUI
                 with st.spinner("🔄 Conectando aos servidores seguros... isso leva alguns segundos."):
                     dados_usuario = validar_login(login_user, login_senha)
                     if dados_usuario:
