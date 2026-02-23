@@ -14,9 +14,19 @@ from PIL import Image
 from supabase import create_client, Client
 import traceback
 
+# Tenta carregar o controlador de cookies de forma segura
+try:
+    from streamlit_cookies_controller import CookieController
+    cookies_enabled = True
+except ImportError:
+    cookies_enabled = False
+
 # --- 1. CONFIGURAÇÃO ---
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered", initial_sidebar_state="collapsed") 
 fuso_local = timezone(timedelta(hours=-3))
+
+if cookies_enabled:
+    cookie_controller = CookieController()
 
 # --- 2. CONEXÃO COM O SUPABASE ---
 try:
@@ -81,7 +91,7 @@ def criar_conta(username, nome, senha):
     try:
         res = supabase.table('users').select('username').eq('username', username).execute()
         if len(res.data) > 0: return False 
-        novo_perfil = {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento Saudável", "atividade": "Moderadamente Ativo", "foto": None, "streak": 1, "last_login": "", "historico_peso": [], "plano": "gratis"}
+        novo_perfil = {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento Saudável", "atividade": "Moderadamente Ativo", "foto": None, "streak": 1, "last_login": "", "historico_peso": [], "plano": "gratis", "rotina": {}, "rotina_preenchida": False}
         supabase.table('users').insert({"username": username, "nome": nome, "senha": hash_senha(senha), "perfil": novo_perfil}).execute()
         return True
     except Exception as e: return False
@@ -127,6 +137,11 @@ def safe_float(valor, padrao):
     try: return float(valor) if valor is not None else padrao
     except: return padrao
 
+def str_to_time(time_str, default):
+    if not time_str: return default
+    try: return datetime.strptime(time_str, "%H:%M").time()
+    except: return default
+
 # --- 5. VERIFICAÇÃO DE API GEMINI ---
 api_configurada = False
 if "GEMINI_API_KEY" in st.secrets:
@@ -140,7 +155,7 @@ if "GEMINI_API_KEY" in st.secrets:
         api_configurada = True
     except Exception as e: pass
 
-# --- 6. INICIALIZAÇÃO DE SESSÃO ---
+# --- 6. INICIALIZAÇÃO DE SESSÃO E COOKIES ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'username' not in st.session_state: st.session_state.username = None
 if 'nome_usuario' not in st.session_state: st.session_state.nome_usuario = None
@@ -150,15 +165,31 @@ if 'cardapio_atual' not in st.session_state: st.session_state.cardapio_atual = N
 if 'cardapio_ideal' not in st.session_state: st.session_state.cardapio_ideal = None
 if 'consumidos' not in st.session_state: st.session_state.consumidos = set()
 if 'chat_history' not in st.session_state: st.session_state.chat_history = []
+if 'sessao_iniciada' not in st.session_state: st.session_state.sessao_iniciada = False
+
+# VERIFICAÇÃO DE LOGIN AUTOMÁTICO (COOKIE)
+if cookies_enabled and not st.session_state.logged_in:
+    saved_user = cookie_controller.get("nutriai_auth_user")
+    if saved_user:
+        res_db = supabase.table('users').select('*').eq('username', saved_user).execute()
+        if len(res_db.data) > 0:
+            user_db = res_db.data[0]
+            st.session_state.logged_in = True
+            st.session_state.username = saved_user
+            st.session_state.nome_usuario = user_db.get('nome', 'Usuário')
+            st.session_state.perfil = user_db.get("perfil") if isinstance(user_db.get("perfil"), dict) else {}
+            st.session_state.despensa = carregar_despensa(saved_user)
+            st.rerun()
 
 def fazer_logout():
+    if cookies_enabled: cookie_controller.remove("nutriai_auth_user")
     for key in list(st.session_state.keys()): del st.session_state[key]
     st.query_params.clear() 
     st.rerun()
 
 # --- INTERCEPTADOR DO GOOGLE ---
 if not st.session_state.logged_in and "code" in st.query_params:
-    st.info("🔄 Conectando...")
+    st.info("🔄 Conectando com o Google...")
     codigo_autorizacao = st.query_params["code"]
     try:
         token_url = "https://oauth2.googleapis.com/token"
@@ -182,87 +213,42 @@ if not st.session_state.logged_in and "code" in st.query_params:
                     st.session_state.nome_usuario = user_db.get('nome', 'Usuário')
                     st.session_state.perfil = user_db.get("perfil") if isinstance(user_db.get("perfil"), dict) else {}
                     st.session_state.despensa = carregar_despensa(username_google)
+                    if cookies_enabled: cookie_controller.set("nutriai_auth_user", username_google, max_age=30*86400) # Salva por 30 dias
                 except Exception as e: pass
                 st.query_params.clear()
                 st.rerun()
         else: st.query_params.clear()
     except Exception as e: pass
 
-# --- 7. UX 8.7: CSS PREMIUM ---
+# --- 7. UX CSS PREMIUM ---
 st.markdown(f"""
     <style>
-    :root {{ 
-        --bg-color: #F5F5F7; 
-        --card-bg: #FFFFFF; 
-        --border-color: #E5E5EA; 
-        --input-border: #C7C7CC; 
-        --input-bg: #FAFAFA; 
-        --text-primary: #1C1C1E; 
-        --text-secondary: #8E8E93;
-        --shadow-color: rgba(0, 0, 0, 0.04); 
-        --accent-color: #34C759;
-        --accent-gradient: linear-gradient(135deg, #34C759 0%, #32D74B 100%);
-    }}
-    @media (prefers-color-scheme: dark) {{
-        :root {{ 
-            --bg-color: #000000; 
-            --card-bg: #1C1C1E; 
-            --border-color: #2C2C2E; 
-            --input-border: #48484A; 
-            --input-bg: #2C2C2E; 
-            --text-primary: #F2F2F7; 
-            --text-secondary: #8E8E93;
-            --shadow-color: rgba(0, 0, 0, 0.5); 
-            --accent-color: #30D158;
-            --accent-gradient: linear-gradient(135deg, #30D158 0%, #28CD41 100%);
-        }}
-    }}
-
-    [data-testid="stSidebar"] {{ display: none !important; }}
-    [data-testid="collapsedControl"] {{ display: none !important; }}
-    #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
-    
+    :root {{ --bg-color: #F5F5F7; --card-bg: #FFFFFF; --border-color: #E5E5EA; --input-border: #C7C7CC; --input-bg: #FAFAFA; --text-primary: #1C1C1E; --text-secondary: #8E8E93; --shadow-color: rgba(0, 0, 0, 0.04); --accent-color: #34C759; --accent-gradient: linear-gradient(135deg, #34C759 0%, #32D74B 100%); }}
+    @media (prefers-color-scheme: dark) {{ :root {{ --bg-color: #000000; --card-bg: #1C1C1E; --border-color: #2C2C2E; --input-border: #48484A; --input-bg: #2C2C2E; --text-primary: #F2F2F7; --text-secondary: #8E8E93; --shadow-color: rgba(0, 0, 0, 0.5); --accent-color: #30D158; --accent-gradient: linear-gradient(135deg, #30D158 0%, #28CD41 100%); }} }}
+    [data-testid="stSidebar"] {{ display: none !important; }} [data-testid="collapsedControl"] {{ display: none !important; }} #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
     .block-container {{ padding-top: 2rem; padding-bottom: 5rem; max-width: 600px !important; margin: 0 auto !important; }}
     .stApp {{ background-color: var(--bg-color) !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Helvetica, Arial, sans-serif !important; }}
-    
     div[data-testid="stVerticalBlockBorderWrapper"] > div {{ background-color: var(--card-bg) !important; border-radius: 20px !important; border: 1px solid var(--border-color) !important; box-shadow: 0px 8px 24px var(--shadow-color) !important; padding: 20px !important; }}
     div[data-baseweb="input"] > div, div[data-baseweb="select"] > div {{ border: 1.5px solid var(--input-border) !important; background-color: var(--input-bg) !important; border-radius: 12px !important; }}
     div[data-baseweb="input"] > div:focus-within, div[data-baseweb="select"] > div:focus-within {{ border-color: var(--accent-color) !important; box-shadow: 0 0 0 2px rgba(52,199,89,0.2) !important; }}
     input {{ color: var(--text-primary) !important; font-size: 16px !important; padding: 12px 14px !important; }}
-    
     div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{ border-radius: 16px !important; height: 50px !important; font-weight: 700 !important; font-size: 16px !important; border: 1px solid var(--input-border) !important; background-color: var(--card-bg) !important; color: var(--text-primary) !important; transition: all 0.15s ease-in-out !important; }}
     div[data-testid="stButton"] button:hover, div[data-testid="stPopover"] > button:hover {{ transform: scale(0.98); opacity: 0.9; }}
     div[data-testid="stButton"] button:active, div[data-testid="stPopover"] > button:active {{ transform: scale(0.92) !important; opacity: 0.7 !important; }}
     div[data-testid="stButton"] button[kind="primary"] {{ background: var(--accent-gradient) !important; color: white !important; border: none !important; }}
-    
     div[data-testid="stTabs"] > div:first-child {{ background-color: var(--bg-color); padding-top: 10px; padding-bottom: 10px; position: -webkit-sticky; position: sticky; top: 0px; z-index: 999; border-bottom: 1px solid var(--border-color); }}
     div[data-testid="stTabs"] button[data-baseweb="tab"] {{ background-color: transparent !important; border-radius: 20px !important; padding: 8px 16px !important; border: none !important; color: var(--text-secondary) !important; }}
     div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {{ background-color: var(--card-bg) !important; color: var(--text-primary) !important; box-shadow: 0 2px 8px var(--shadow-color) !important; }}
     div[data-testid="stTabs"] button[data-baseweb="tab"] > div[data-testid="stMarkdownContainer"] > p {{ font-size: 1.2rem !important; margin: 0 !important; padding: 0 !important; }}
-
     .btn-google-nativo {{ display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1.5px solid var(--input-border); border-radius: 16px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; box-shadow: 0 2px 8px var(--shadow-color); transition: all 0.15s ease; }}
     .btn-pro {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: #000 !important; border-radius: 16px; height: 55px; font-weight: 800; font-size: 18px; border: none; width: 100%; text-decoration: none; transition: all 0.15s ease; }}
     .btn-whatsapp {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #30D158 0%, #28CD41 100%); color: #FFF !important; border-radius: 16px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; margin-top: 15px; transition: all 0.15s ease; }}
     .btn-google-nativo:active, .btn-pro:active, .btn-whatsapp:active {{ transform: scale(0.92) !important; opacity: 0.7 !important; }}
-
-    table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; background-color: transparent; }}
-    th {{ color: var(--text-secondary) !important; font-weight: 600 !important; border-bottom: 1px solid var(--border-color) !important; text-align: left !important; padding-bottom: 10px !important; }}
-    td, th {{ padding: 14px 8px !important; border-bottom: 1px solid var(--border-color) !important; border-top: none !important; border-left: none !important; border-right: none !important; color: var(--text-primary) !important; }}
-    tr:last-child td {{ border-bottom: none !important; }}
-    
-    .macro-bar-container {{ width: 100%; background-color: var(--border-color); border-radius: 10px; height: 8px; margin-top: 6px; overflow: hidden; }}
-    .macro-bar-fill {{ height: 100%; border-radius: 10px; transition: width 0.8s ease; }}
-    .bg-kcal {{ background: linear-gradient(90deg, #FF9500, #FFCC00); }} .bg-prot {{ background: linear-gradient(90deg, #34C759, #32D74B); }} .bg-carb {{ background: linear-gradient(90deg, #007AFF, #5AC8FA); }} .bg-gord {{ background: linear-gradient(90deg, #AF52DE, #FF2D55); }}
-    
+    table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; background-color: transparent; }} th {{ color: var(--text-secondary) !important; font-weight: 600 !important; border-bottom: 1px solid var(--border-color) !important; text-align: left !important; padding-bottom: 10px !important; }} td, th {{ padding: 14px 8px !important; border-bottom: 1px solid var(--border-color) !important; border-top: none !important; border-left: none !important; border-right: none !important; color: var(--text-primary) !important; }} tr:last-child td {{ border-bottom: none !important; }}
+    .macro-bar-container {{ width: 100%; background-color: var(--border-color); border-radius: 10px; height: 8px; margin-top: 6px; overflow: hidden; }} .macro-bar-fill {{ height: 100%; border-radius: 10px; transition: width 0.8s ease; }} .bg-kcal {{ background: linear-gradient(90deg, #FF9500, #FFCC00); }} .bg-prot {{ background: linear-gradient(90deg, #34C759, #32D74B); }} .bg-carb {{ background: linear-gradient(90deg, #007AFF, #5AC8FA); }} .bg-gord {{ background: linear-gradient(90deg, #AF52DE, #FF2D55); }}
     [data-testid="stArrowVegaLiteChart"] {{ pointer-events: none !important; touch-action: none !important; }}
-
-    .adapt-text {{ color: var(--text-primary) !important; }}
-    .sub-text {{ color: var(--text-secondary) !important; font-size: 0.95rem; }}
-    
-    .brand-container {{ display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 35px; margin-top: 10px; }}
-    .brand-icon-box {{ background: var(--accent-gradient); width: 70px; height: 70px; border-radius: 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(52, 199, 89, 0.3); margin-bottom: 15px; }}
-    .brand-icon {{ font-size: 38px; line-height: 1; }}
-    .brand-text {{ font-size: 2.8rem; font-weight: 900; margin: 0; padding: 0; line-height: 1.1; background: var(--text-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -1px; }}
+    .adapt-text {{ color: var(--text-primary) !important; }} .sub-text {{ color: var(--text-secondary) !important; font-size: 0.95rem; }}
+    .brand-container {{ display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 35px; margin-top: 10px; }} .brand-icon-box {{ background: var(--accent-gradient); width: 70px; height: 70px; border-radius: 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(52, 199, 89, 0.3); margin-bottom: 15px; }} .brand-icon {{ font-size: 38px; line-height: 1; }} .brand-text {{ font-size: 2.8rem; font-weight: 900; margin: 0; padding: 0; line-height: 1.1; background: var(--text-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -1px; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -283,6 +269,8 @@ if not st.session_state.logged_in:
         login_user = st.text_input("Usuário", placeholder="Ex: pablo", label_visibility="collapsed")
         login_senha = st.text_input("Senha", type="password", placeholder="Sua senha secreta", label_visibility="collapsed")
         
+        lembrar_me = st.checkbox("Mantenha-me conectado", value=True)
+        
         st.write("")
         if st.button("Entrar no App", use_container_width=True, type="primary"):
             if login_user and login_senha:
@@ -295,6 +283,9 @@ if not st.session_state.logged_in:
                         perfil_carregado = dados_usuario.get("perfil")
                         st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
                         st.session_state.despensa = carregar_despensa(login_user)
+                        
+                        if lembrar_me and cookies_enabled:
+                            cookie_controller.set("nutriai_auth_user", login_user, max_age=30*86400)
                         st.rerun()
                     else: st.error("Usuário ou senha incorretos.")
             else: st.warning("Preencha todos os campos.")
@@ -330,6 +321,14 @@ else:
         hoje_str = hoje.strftime("%Y-%m-%d")
         ontem = hoje - timedelta(days=1)
         last_login_str = str(perfil_seguro.get("last_login") or "")
+
+        # RECUPERA O CARDÁPIO SALVO DA MEMÓRIA
+        if not st.session_state.sessao_iniciada:
+            cardapio_banco = perfil_seguro.get("cardapio_salvo", {})
+            if cardapio_banco.get("data") == hoje_str:
+                st.session_state.cardapio_atual = cardapio_banco.get("plan")
+                st.session_state.consumidos = set(cardapio_banco.get("consumidos", []))
+            st.session_state.sessao_iniciada = True
 
         if last_login_str:
             try:
@@ -405,28 +404,44 @@ else:
 
         with tab1:
             st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🕒 Sua Rotina Diária</h3>", unsafe_allow_html=True)
+            
+            rotina_salva = st.session_state.perfil.get("rotina", {})
+            tempo_prep_salvo = safe_int(st.session_state.perfil.get("tempo_preparo"), 30)
+
             with st.container(border=True):
                 c1, c2 = st.columns(2)
-                hora_acordar = c1.time_input("☀️ Acordar", dt_time(6, 30))
-                hora_dormir = c2.time_input("🌙 Dormir", dt_time(23, 0))
+                hora_acordar = c1.time_input("☀️ Acordar", str_to_time(rotina_salva.get("acordar"), dt_time(6, 30)))
+                hora_dormir = c2.time_input("🌙 Dormir", str_to_time(rotina_salva.get("dormir"), dt_time(23, 0)))
                 c3, c4 = st.columns(2)
-                trab_inicio = c3.time_input("💼 Trab. Início", dt_time(8, 0))
-                trab_fim = c4.time_input("💼 Trab. Fim", dt_time(17, 30))
+                trab_inicio = c3.time_input("💼 Trab. Início", str_to_time(rotina_salva.get("trab_inicio"), dt_time(8, 0)))
+                trab_fim = c4.time_input("💼 Trab. Fim", str_to_time(rotina_salva.get("trab_fim"), dt_time(17, 30)))
                 c5, c6 = st.columns(2)
-                transito_inicio = c5.time_input("🚗 Trâns. Início", dt_time(17, 30))
-                transito_fim = c6.time_input("🏁 Trâns. Fim", dt_time(18, 30))
+                transito_inicio = c5.time_input("🚗 Trâns. Início", str_to_time(rotina_salva.get("trans_inicio"), dt_time(17, 30)))
+                transito_fim = c6.time_input("🏁 Trâns. Fim", str_to_time(rotina_salva.get("trans_fim"), dt_time(18, 30)))
                 c7, c8 = st.columns(2)
-                treino_inicio = c7.time_input("💪 Treino Início", dt_time(19, 0))
-                treino_fim = c8.time_input("🚿 Treino Fim", dt_time(20, 0))
+                treino_inicio = c7.time_input("💪 Treino Início", str_to_time(rotina_salva.get("treino_inicio"), dt_time(19, 0)))
+                treino_fim = c8.time_input("🚿 Treino Fim", str_to_time(rotina_salva.get("treino_fim"), dt_time(20, 0)))
                 c9, c10 = st.columns(2)
-                estudo_inicio = c9.time_input("📚 Estudo Início", dt_time(20, 30))
-                estudo_fim = c10.time_input("📝 Estudo Fim", dt_time(22, 0))
+                estudo_inicio = c9.time_input("📚 Estudo Início", str_to_time(rotina_salva.get("estudo_inicio"), dt_time(20, 30)))
+                estudo_fim = c10.time_input("📝 Estudo Fim", str_to_time(rotina_salva.get("estudo_fim"), dt_time(22, 0)))
                 st.divider()
-                tempo_preparo = st.slider("⏱️ Tempo livre para cozinhar (min/dia)", 0, 120, 30)
+                tempo_preparo = st.slider("⏱️ Tempo livre para cozinhar (min/dia)", 0, 120, tempo_prep_salvo)
+                
                 if st.button("Salvar Rotina", use_container_width=True, type="primary"):
+                    st.session_state.perfil["rotina"] = {
+                        "acordar": hora_acordar.strftime("%H:%M"), "dormir": hora_dormir.strftime("%H:%M"),
+                        "trab_inicio": trab_inicio.strftime("%H:%M"), "trab_fim": trab_fim.strftime("%H:%M"),
+                        "trans_inicio": transito_inicio.strftime("%H:%M"), "trans_fim": transito_fim.strftime("%H:%M"),
+                        "treino_inicio": treino_inicio.strftime("%H:%M"), "treino_fim": treino_fim.strftime("%H:%M"),
+                        "estudo_inicio": estudo_inicio.strftime("%H:%M"), "estudo_fim": estudo_fim.strftime("%H:%M")
+                    }
+                    st.session_state.perfil["tempo_preparo"] = tempo_preparo
+                    st.session_state.perfil["rotina_preenchida"] = True
+                    salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                    
                     st.session_state.cardapio_atual = None
                     st.session_state.consumidos = set()
-                    st.toast("✅ Horários salvos no motor da IA!")
+                    st.toast("✅ Horários salvos no banco de dados!")
                     time.sleep(0.5)
                     st.rerun()
 
@@ -492,43 +507,85 @@ else:
 
         with tab3:
             st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🍽️ Plano Alimentar IA</h3>", unsafe_allow_html=True)
+            
+            # Checagem Inteligente de Empty States
+            tem_rotina = st.session_state.perfil.get("rotina_preenchida", False)
+            df_temp_check = st.session_state.despensa.copy()
+            if not df_temp_check.empty:
+                df_temp_check['Quantidade_Num'] = pd.to_numeric(df_temp_check['Quantidade'], errors='coerce').fillna(0)
+                tem_estoque = not df_temp_check[df_temp_check["Quantidade_Num"] > 0].empty
+            else:
+                tem_estoque = False
+
             if st.session_state.cardapio_atual is None:
-                st.markdown("""
-                <div style='text-align: center; padding: 40px 20px;'>
-                    <h1 style='font-size: 4rem; margin-bottom: 5px; opacity: 0.8;'>🥗</h1>
-                    <h3 class='adapt-text' style='font-weight: 700; margin-bottom: 5px;'>Seu plano em branco</h3>
-                    <p class='sub-text' style='margin-bottom: 25px;'>Aperte o botão para criar um plano sincronizado com o seu estoque e rotina de hoje.</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-            if st.button("⚡ Gerar Plano Alimentar IA", use_container_width=True, type="primary"):
-                if not api_configurada: 
-                    st.error("⚠️ Inteligência Artificial offline.")
+                if tem_rotina and tem_estoque:
+                    st.markdown("""
+                    <div style='text-align: center; padding: 40px 20px;'>
+                        <h1 style='font-size: 4rem; margin-bottom: 5px; opacity: 0.8;'>🥗</h1>
+                        <h3 class='adapt-text' style='font-weight: 700; margin-bottom: 5px;'>Tudo pronto!</h3>
+                        <p class='sub-text' style='margin-bottom: 25px;'>Sua rotina e sua despensa estão configuradas. Vamos criar o plano de hoje?</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    if st.button("⚡ Gerar Plano Alimentar IA", use_container_width=True, type="primary"):
+                        if not api_configurada: 
+                            st.error("⚠️ Inteligência Artificial offline.")
+                        else:
+                            with st.spinner("Analisando sua rotina e despensa..."):
+                                df_temp = st.session_state.despensa.copy()
+                                df_temp['Quantidade_Num'] = pd.to_numeric(df_temp['Quantidade'], errors='coerce').fillna(0)
+                                despensa_ativa = df_temp[df_temp["Quantidade_Num"] > 0]
+                                rot = st.session_state.perfil.get("rotina", {})
+                                t_prep = st.session_state.perfil.get("tempo_preparo", 30)
+                                
+                                prompt = f"""
+                                Nutricionista Clínico. Crie o cardápio real de hoje usando APENAS O ESTOQUE.
+                                BIOMETRIA: {dados_perfil_ia}
+                                AGENDA: Acorda {rot.get('acordar','06:30')} | Trab {rot.get('trab_inicio','08:00')}-{rot.get('trab_fim','17:30')} | Transito {rot.get('trans_inicio','17:30')}-{rot.get('trans_fim','18:30')} | Treino {rot.get('treino_inicio','19:00')}-{rot.get('treino_fim','20:00')} | Estudo {rot.get('estudo_inicio','20:30')}-{rot.get('estudo_fim','22:00')} | Dorme {rot.get('dormir','23:00')} | Prep. Máx: {t_prep} min.
+                                ESTOQUE: {despensa_ativa.to_dict(orient="records")}
+                                Retorne JSON exato: {{"resumo_diario": {{"calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "ingredientes": "Qtd", "instrucao_preparo": "Instrução", "macros": {{"calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g"}}, "uso_despensa": [{{"nome_exato": "NOME", "qtd_descontada": 150}}]}}]}}
+                                """
+                                try:
+                                    resp = modelo.generate_content(prompt).text.strip()
+                                    plano_json = json.loads(re.search(r'\{.*\}', resp, re.DOTALL).group(0))
+                                    st.session_state.cardapio_atual = plano_json
+                                    
+                                    # SALVA NO BANCO DE DADOS NA HORA!
+                                    st.session_state.perfil["cardapio_salvo"] = {
+                                        "data": hoje_str,
+                                        "plan": plano_json,
+                                        "consumidos": list(st.session_state.consumidos)
+                                    }
+                                    salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                                    st.rerun()
+                                except Exception as e: st.error(f"Erro na IA: {e}")
                 else:
-                    # 🚨 TRAVA DE SEGURANÇA: Verifica se a despensa tem comida 🚨
-                    df_temp = st.session_state.despensa.copy()
-                    if not df_temp.empty:
-                        df_temp['Quantidade_Num'] = pd.to_numeric(df_temp['Quantidade'], errors='coerce').fillna(0)
-                        despensa_ativa = df_temp[df_temp["Quantidade_Num"] > 0]
-                    else: 
-                        despensa_ativa = pd.DataFrame()
-                        
-                    if despensa_ativa.empty:
-                        st.warning("⚠️ O seu estoque está vazio! Vá até a aba 📦 Estoque e adicione alguns alimentos antes de gerar o plano, senão a IA não terá com o que cozinhar.")
-                    else:
-                        with st.spinner("Analisando sua rotina e despensa..."):
-                            prompt = f"""
-                            Nutricionista Clínico. Crie o cardápio real de hoje usando APENAS O ESTOQUE.
-                            BIOMETRIA: {dados_perfil_ia}
-                            AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')}-{trab_fim.strftime('%H:%M')} | Transito {transito_inicio.strftime('%H:%M')}-{transito_fim.strftime('%H:%M')} | Treino {treino_inicio.strftime('%H:%M')}-{treino_fim.strftime('%H:%M')} | Estudo {estudo_inicio.strftime('%H:%M')}-{estudo_fim.strftime('%H:%M')} | Dorme {hora_dormir.strftime('%H:%M')} | Prep. Máx: {tempo_preparo} min.
-                            ESTOQUE: {despensa_ativa.to_dict(orient="records")}
-                            Retorne JSON exato: {{"resumo_diario": {{"calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "ingredientes": "Qtd", "instrucao_preparo": "Instrução", "macros": {{"calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g"}}, "uso_despensa": [{{"nome_exato": "NOME", "qtd_descontada": 150}}]}}]}}
-                            """
-                            try:
-                                resp = modelo.generate_content(prompt).text.strip()
-                                st.session_state.cardapio_atual = json.loads(re.search(r'\{.*\}', resp, re.DOTALL).group(0))
+                    st.warning("⚠️ Precisamos preparar o terreno antes da IA trabalhar.")
+                    
+                    if not tem_rotina:
+                        with st.container(border=True):
+                            st.markdown("#### 🕒 1. Faltam seus Horários")
+                            st.write("A IA precisa saber que horas você acorda para montar os lanches.")
+                            if st.button("Salvar Rotina Padrão (Das 07h às 23h)", use_container_width=True):
+                                st.session_state.perfil["rotina"] = {"acordar": "07:00", "dormir": "23:00", "trab_inicio": "08:00", "trab_fim": "18:00", "trans_inicio": "18:00", "trans_fim": "19:00", "treino_inicio": "19:00", "treino_fim": "20:00", "estudo_inicio": "20:30", "estudo_fim": "22:00"}
+                                st.session_state.perfil["tempo_preparo"] = 30
+                                st.session_state.perfil["rotina_preenchida"] = True
+                                salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                                 st.rerun()
-                            except Exception as e: st.error(f"Erro na IA: {e}")
+                                
+                    if not tem_estoque:
+                        with st.container(border=True):
+                            st.markdown("#### 📦 2. Falta Comida no Estoque")
+                            st.write("A IA não pode inventar comida. Adicione pelo menos 1 item para começarmos:")
+                            n_nome = st.text_input("Nome do Alimento", key="fast_alimento")
+                            n_qtd = st.number_input("Quantidade", min_value=1.0, step=1.0, key="fast_qtd")
+                            if st.button("➕ Adicionar à Despensa", type="primary", use_container_width=True):
+                                if n_nome:
+                                    novo_item = pd.DataFrame({"Alimento": [n_nome], "Quantidade": [float(n_qtd)], "Unidade": ["g"], "Pronto/Rápido": ["Não"]})
+                                    if st.session_state.despensa.empty: st.session_state.despensa = novo_item
+                                    else: st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
+                                    salvar_despensa(st.session_state.despensa, st.session_state.username) 
+                                    st.rerun()
 
             if st.session_state.cardapio_atual is not None:
                 resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
@@ -573,6 +630,10 @@ else:
                         with c_chk:
                             if st.checkbox("Baixa", key=f"c_{i}", value=ja_cons, disabled=ja_cons, label_visibility="collapsed"):
                                 st.session_state.consumidos.add(id_ref)
+                                # SALVA O PROGRESSO NO BANCO NA HORA!
+                                st.session_state.perfil["cardapio_salvo"]["consumidos"] = list(st.session_state.consumidos)
+                                salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                                
                                 for item in ref.get("uso_despensa", []):
                                     if not st.session_state.despensa.empty:
                                         idx = st.session_state.despensa.index[st.session_state.despensa['Alimento'] == item.get("nome_exato")].tolist()
@@ -582,6 +643,13 @@ else:
                                             st.session_state.despensa.at[idx[0], 'Quantidade'] = max(0.0, qtd_atual - qtd_descontada)
                                 salvar_despensa(st.session_state.despensa, st.session_state.username)
                                 st.rerun()
+                                
+                if st.button("🗑️ Descartar Plano e Criar Outro", use_container_width=True):
+                    st.session_state.cardapio_atual = None
+                    st.session_state.consumidos = set()
+                    st.session_state.perfil["cardapio_salvo"] = {}
+                    salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                    st.rerun()
 
         with tab4:
             st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>📈 Gráfico de Evolução</h3>", unsafe_allow_html=True)
