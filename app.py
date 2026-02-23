@@ -14,7 +14,6 @@ from supabase import create_client, Client
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered", initial_sidebar_state="collapsed") 
 fuso_local = timezone(timedelta(hours=-3))
 
-# Tags PWA para forçar o celular a tratar o site como Aplicativo Nativo
 st.markdown("""
     <head>
         <meta name="apple-mobile-web-app-capable" content="yes">
@@ -87,7 +86,6 @@ def criar_conta(username, nome, senha):
         res = supabase.table('users').select('username').eq('username', username).execute()
         if len(res.data) > 0: return False 
         
-        # UX 6.0: Adicionado controle de Histórico de Peso e Plano Grátis/PRO
         novo_perfil = {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento Saudável", "atividade": "Moderadamente Ativo", "foto": None, "streak": 1, "last_login": "", "historico_peso": [], "plano": "gratis"}
         supabase.table('users').insert({"username": username, "nome": nome, "senha": hash_senha(senha), "perfil": novo_perfil}).execute()
         return True
@@ -194,7 +192,7 @@ if not st.session_state.logged_in and "code" in st.query_params:
 # --- 7. CSS ADAPTATIVO ---
 st.markdown(f"""
     <style>
-    :root {{ --bg-color: #F2F2F7; --card-bg: #FFFFFF; --border-color: #E5E5EA; --input-bg: #FAFAFA; --text-primary: #000000; --shadow-color: rgba(0, 0, 0, 0.04); --pro-color: #FFD700; }}
+    :root {{ --bg-color: #F2F2F7; --card-bg: #FFFFFF; --border-color: #E5E5EA; --input-bg: #FAFAFA; --text-primary: #000000; --shadow-color: rgba(0, 0, 0, 0.04); }}
     @media (prefers-color-scheme: dark) {{
         :root {{ --bg-color: #0E1117; --card-bg: #262730; --border-color: #333333; --input-bg: #1A1C23; --text-primary: #FAFAFA; --shadow-color: rgba(0, 0, 0, 0.3); }}
     }}
@@ -221,11 +219,17 @@ st.markdown(f"""
     .btn-google-nativo {{
         display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 20px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease-in-out; box-shadow: 0 1px 3px var(--shadow-color);
     }}
-    
-    /* Paywall Button */
+    .btn-google-nativo:hover {{ opacity: 0.8; transform: scale(0.98); }}
+
+    /* Botão Paywall */
     .btn-pro {{
         display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); color: #000 !important; border-radius: 20px; height: 55px; font-weight: 800; font-size: 18px; border: none; width: 100%; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.3);
     }}
+
+    .btn-whatsapp {{
+        display: flex; align-items: center; justify-content: center; background-color: #25D366; color: #FFFFFF !important; border-radius: 20px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease-in-out; margin-top: 15px; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.2);
+    }}
+    .btn-whatsapp:hover {{ background-color: #128C7E; transform: scale(0.98); }}
 
     table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; }}
     th {{ color: #8E8E93 !important; font-weight: 600 !important; border-bottom: 1px solid var(--border-color) !important; text-align: left !important; padding-bottom: 8px !important; }}
@@ -314,7 +318,6 @@ else:
     elif hora_atual < 18: saudacao, icone_tempo = "Boa tarde", "☕"
     else: saudacao, icone_tempo = "Boa noite", "🌙"
 
-    # Status PRO Visual
     eh_pro = st.session_state.perfil.get("plano", "gratis") == "premium"
     badge_pro = "👑 PRO" if eh_pro else ""
 
@@ -371,7 +374,6 @@ else:
 
     dados_perfil_ia = f"{p_idade} anos, {p_peso}kg, {p_altura}cm. Objetivo: {p_obj}. Ativ: {p_atv}."
 
-    # UX 6.0: Novas Abas
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🕒", "📦", "🍽️", "📈", "👩‍⚕️ PRO", "💬 PRO"])
 
     with tab1:
@@ -434,12 +436,20 @@ else:
             if st.button("⚡ Gerar Cardápio de Hoje", use_container_width=True, type="primary"):
                 with st.spinner("Calculando com a IA..."):
                     despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
-                    prompt = f"Nutricionista Clínico. Crie cardápio usando ESTOQUE. BIOMETRIA: {dados_perfil_ia}. ESTOQUE: {despensa_ativa.to_dict('records')}. Retorne JSON exato: {{\"resumo_diario\": {{\"calorias_totais\": 0, \"proteinas_totais\": \"0g\", \"carbos_totais\": \"0g\", \"gorduras_totais\": \"0g\"}}, \"refeicoes\": [{{\"hora\": \"HH:MM\", \"nome\": \"Nome\", \"ingredientes\": \"Qtd\", \"instrucao_preparo\": \"Instrução\", \"macros\": {{"calorias\": 0, \"proteinas\": \"0g\", \"carbos\": \"0g\", \"gorduras\": \"0g\"}}, \"uso_despensa\": [{{\"nome_exato\": \"NOME\", \"qtd_descontada\": 150}}]}}]}}"
+                    
+                    # PROMPT CORRIGIDO E PROTEGIDO
+                    prompt = f"""
+                    Nutricionista Clínico especialista. Crie o cardápio real de hoje usando APENAS O ESTOQUE.
+                    BIOMETRIA: {dados_perfil_ia}
+                    AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Prep. Máx: {tempo_preparo} min.
+                    ESTOQUE: {despensa_ativa.to_dict(orient="records")}
+                    Retorne JSON exato: {{"resumo_diario": {{"calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "ingredientes": "Qtd", "instrucao_preparo": "Instrução", "macros": {{"calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g"}}, "uso_despensa": [{{"nome_exato": "NOME", "qtd_descontada": 150}}]}}]}}
+                    """
                     try:
                         resp = modelo.generate_content(prompt).text.strip()
                         st.session_state.cardapio_atual = json.loads(re.search(r'\{.*\}', resp, re.DOTALL).group(0))
                         st.rerun()
-                    except Exception: st.error("Erro na IA.")
+                    except Exception as e: st.error(f"Erro na IA: {e}")
 
         if st.session_state.cardapio_atual is not None:
             refeicoes = st.session_state.cardapio_atual.get("refeicoes", [])
@@ -466,7 +476,6 @@ else:
         historico = st.session_state.perfil.get("historico_peso", [])
         
         if historico:
-            # Gráfico de Linha Nativo
             df_hist = pd.DataFrame(historico)
             df_hist['data'] = pd.to_datetime(df_hist['data'])
             df_hist = df_hist.set_index('data')
@@ -496,7 +505,6 @@ else:
             </div>
             """, unsafe_allow_html=True)
             if st.button("🌟 Assinar NutryAi PRO", use_container_width=True, type="primary"):
-                # SIMULADOR DE PAGAMENTO
                 st.session_state.perfil["plano"] = "premium"
                 salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                 st.balloons()
@@ -505,12 +513,63 @@ else:
         else:
             st.markdown("### 👩‍⚕️ Plano Padrão Ouro")
             if st.button("✨ Gerar Plano Ideal", use_container_width=True, type="primary"):
-                st.success("Logica do Plano Ideal ativada (Você é PRO!)")
+                if not api_configurada: st.error("⚠️ Configure a chave de API.")
+                else:
+                    with st.spinner("Calculando o mapa nutricional para o seu biotipo..."):
+                        prompt_ideal = f"""
+                        Nutricionista especialista. Crie um PLANO DE METAS e ESTRUTURAÇÃO DE PRATOS. IGNORAR ESTOQUE.
+                        BIOMETRIA: {dados_perfil_ia}
+                        REGRAS: Carbo Complexo SEMPRE com Proteína/Gordura Boa. Nenhuma salada matinal.
+                        AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Tempo cozinhar: {tempo_preparo} min.
+                        Retorne JSON: {{"metas_diarias": {{"calorias": "2000 kcal", "carboidratos": "150g", "proteinas": "140g", "gorduras": "60g", "fibras": "30g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "alvo_macros": "Carbos: 30g | Prot: 25g", "estrutura_prato": "Regra de porções", "sugestoes_flexiveis": "3 opções", "instrucao_clinica": "Explicação clínica"}}]}}
+                        """
+                        try:
+                            resposta_ideal = modelo.generate_content(prompt_ideal)
+                            texto_limpo_ideal = re.search(r'\{.*\}', resposta_ideal.text.strip(), re.DOTALL).group(0) if re.search(r'\{.*\}', resposta_ideal.text.strip(), re.DOTALL) else resposta_ideal.text.strip()
+                            st.session_state.cardapio_ideal = json.loads(texto_limpo_ideal)
+                        except Exception as e: st.error(f"🚨 Erro: {e}")
+                            
+            if st.session_state.cardapio_ideal:
+                metas = st.session_state.cardapio_ideal.get("metas_diarias", {})
+                c1, c2, c3, c4, c5 = st.columns(5)
+                c1.metric("🔥 Kcal", metas.get("calorias", "0"))
+                c2.metric("🌾 Carb", metas.get("carboidratos", "0g"))
+                c3.metric("🥩 Prot", metas.get("proteinas", "0g"))
+                c4.metric("🥑 Gord", metas.get("gorduras", "0g"))
+                c5.metric("🥦 Fibra", metas.get("fibras", "0g"))
+                st.divider()
+                for ref_ideal in st.session_state.cardapio_ideal.get("refeicoes", []):
+                    with st.container(border=True):
+                        st.markdown(f"#### ⏰ {ref_ideal.get('hora', '')} - {ref_ideal.get('nome', '')}")
+                        st.caption(f"**🎯 Alvo:** {ref_ideal.get('alvo_macros', '')}")
+                        st.markdown(f"**🧩 Montagem:** {ref_ideal.get('estrutura_prato', '')}")
+                        st.markdown(f"**💡 Opções:** {ref_ideal.get('sugestoes_flexiveis', '')}")
+                        st.info(f"👩‍⚕️ **Clínica:** {ref_ideal.get('instrucao_clinica', '')}")
 
     with tab6:
         if not eh_pro:
             st.warning("🔒 Assine o plano PRO para conversar com a Nutricionista.")
         else:
             st.markdown("### 💬 Chat com a Nutri")
+            foto_upload = st.file_uploader("📸 Foto do prato ou rótulo", type=["jpg", "jpeg", "png"])
+            for msg in st.session_state.chat_history:
+                with st.chat_message(msg["role"]): st.markdown(msg["content"])
             prompt_chat = st.chat_input("Dúvidas no mercado?")
-            if prompt_chat: st.success("Lógica do chat ativada! (Você é PRO!)")
+            if prompt_chat:
+                if not api_configurada: st.error("⚠️ Configure a API.")
+                else:
+                    st.session_state.chat_history.append({"role": "user", "content": prompt_chat})
+                    with st.chat_message("user"):
+                        st.markdown(prompt_chat)
+                        if foto_upload: st.image(foto_upload, width=250); st.caption("📷 Foto enviada.")
+                    with st.chat_message("assistant"):
+                        with st.spinner("A Nutri está digitando..."):
+                            try:
+                                conteudo_ia = [f"Você é a NutryAi, Nutricionista Clínica. O paciente tem o seguinte perfil: {dados_perfil_ia}. Seja prestativa, use tom amigável. Avalie impactos na insulina se o paciente perguntar sobre alimentos ou fotos.", prompt_chat]
+                                if foto_upload:
+                                    imagem_pil = Image.open(foto_upload)
+                                    conteudo_ia.append(imagem_pil)
+                                resposta_chat = modelo.generate_content(conteudo_ia)
+                                st.markdown(resposta_chat.text)
+                                st.session_state.chat_history.append({"role": "assistant", "content": resposta_chat.text})
+                            except Exception as e: st.error(f"Erro na resposta: {e}")
