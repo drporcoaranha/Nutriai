@@ -271,7 +271,6 @@ if not st.session_state.logged_in:
         
         lembrar_me = st.checkbox("Mantenha-me conectado", value=True)
         
-        st.write("")
         if st.button("Entrar no App", use_container_width=True, type="primary"):
             if login_user and login_senha:
                 with st.spinner("🔄 Conectando aos servidores seguros..."):
@@ -290,10 +289,10 @@ if not st.session_state.logged_in:
                     else: st.error("Usuário ou senha incorretos.")
             else: st.warning("Preencha todos os campos.")
                 
-        st.markdown("<div style='text-align: center; margin: 15px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
+        # MARGENS DO "OU" REDUZIDAS PARA 5PX
+        st.markdown("<div style='text-align: center; margin: 5px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
         if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
 
-    st.write("")
     with st.expander("Não tem uma conta? Clique aqui para criar"):
         cad_nome = st.text_input("Como quer ser chamado?")
         cad_user = st.text_input("Nome de usuário (ex: pablo)").lower()
@@ -306,9 +305,6 @@ if not st.session_state.logged_in:
 # MÓDULO 2: O APLICATIVO (LOGADO)
 # ==========================================
 else:
-    # ---------------------------------------------------------
-    # MODAIS DE ESTOQUE (Fecham sozinhos após o sucesso!)
-    # ---------------------------------------------------------
     @st.dialog("➕ Adicionar Alimento")
     def modal_adicionar():
         n_nome = st.text_input("Qual o alimento?")
@@ -317,11 +313,9 @@ else:
         n_pronto = st.radio("Consumo Rápido?", ["Não", "Sim"], horizontal=True)
         if st.button("Guardar no Estoque", type="primary", use_container_width=True):
             if n_nome:
-                # O SEGREDO DA NORMALIZAÇÃO (ex: " ovos " vira "Ovos")
                 nome_fmt = n_nome.strip().capitalize()
                 df = st.session_state.despensa
                 
-                # Se já existe, apenas soma a quantidade!
                 if not df.empty and nome_fmt in df['Alimento'].values:
                     idx = df.index[df['Alimento'] == nome_fmt].tolist()[0]
                     df.at[idx, 'Quantidade'] = float(df.at[idx, 'Quantidade']) + float(n_qtd)
@@ -335,7 +329,7 @@ else:
                 salvar_despensa(st.session_state.despensa, st.session_state.username) 
                 st.toast(f"✅ {nome_fmt} guardado na despensa!")
                 time.sleep(0.5)
-                st.rerun() # Fecha a janela modal automaticamente
+                st.rerun() 
             else:
                 st.warning("Digite o nome do alimento.")
 
@@ -349,10 +343,9 @@ else:
                 salvar_despensa(st.session_state.despensa, st.session_state.username)
                 st.toast("🗑️ Item removido do estoque.")
                 time.sleep(0.5)
-                st.rerun() # Fecha a janela modal automaticamente
+                st.rerun() 
         else: 
             st.write("Seu estoque já está vazio.")
-    # ---------------------------------------------------------
 
     try:
         perfil_seguro = st.session_state.perfil if isinstance(st.session_state.perfil, dict) else {}
@@ -370,7 +363,6 @@ else:
         ontem = hoje - timedelta(days=1)
         last_login_str = str(perfil_seguro.get("last_login") or "")
 
-        # RECUPERA O CARDÁPIO SALVO DA MEMÓRIA
         if not st.session_state.sessao_iniciada:
             cardapio_banco = perfil_seguro.get("cardapio_salvo", {})
             if cardapio_banco.get("data") == hoje_str:
@@ -599,13 +591,12 @@ else:
                                 
                     if not tem_estoque:
                         with st.container(border=True):
-                            st.markdown("<h4 class='adapt-text'>🛒 2. O que tem na geladeira?</h4>", unsafe_allow_html=True)
-                            st.write("Para montarmos pratos deliciosos e evitar desperdícios, me conte pelo menos um alimento que você tem disponível hoje:")
-                            n_nome = st.text_input("Nome do Alimento", key="fast_alimento", placeholder="Ex: Ovos, Aveia, Arroz...")
+                            st.markdown("<h4 class='adapt-text'>🛒 2. Sua despensa está vazia!</h4>", unsafe_allow_html=True)
+                            st.write("Para que a IA crie um cardápio prático e real, adicione o que você tem na geladeira agora.")
+                            n_nome = st.text_input("O que você tem hoje?", key="fast_alimento", placeholder="Ex: Ovos, Frango, Aveia...")
                             n_qtd = st.number_input("Quantidade", min_value=1.0, step=1.0, key="fast_qtd")
                             if st.button("➕ Salvar na Despensa", type="primary", use_container_width=True):
                                 if n_nome:
-                                    # NORMALIZAÇÃO TAMBÉM APLICADA AQUI NO CADASTRO RÁPIDO
                                     nome_fmt = n_nome.strip().capitalize()
                                     df = st.session_state.despensa
                                     
