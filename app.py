@@ -67,7 +67,7 @@ GOOGLE_SVG = """
 </svg>
 """
 
-# --- 4. FUNÇÕES DE BANCO DE DADOS ---
+# --- 4. FUNÇÕES DE BANCO DE DADOS PROTEGIDAS ---
 def hash_senha(senha):
     return hashlib.sha256(str.encode(senha)).hexdigest()
 
@@ -100,13 +100,16 @@ def carregar_despensa(username):
         res = supabase.table('despensa').select('*').eq('username', username).execute()
         if len(res.data) > 0:
             df = pd.DataFrame(res.data)
+            # Proteção: Garante que as colunas existam mesmo se vierem vazias
+            for col in ["alimento", "quantidade", "unidade", "pronto_rapido"]:
+                if col not in df.columns: df[col] = ""
+                
             df['quantidade'] = pd.to_numeric(df['quantidade'], errors='coerce').fillna(0)
             df = df.rename(columns={"alimento": "Alimento", "quantidade": "Quantidade", "unidade": "Unidade", "pronto_rapido": "Pronto/Rápido"})
             return df[['Alimento', 'Quantidade', 'Unidade', 'Pronto/Rápido']]
     except Exception as e: pass
     
     df_padrao = pd.DataFrame({"Alimento": ["Ovos", "Aveia", "Frango"], "Quantidade": [12.0, 500.0, 1000.0], "Unidade": ["un", "g", "g"], "Pronto/Rápido": ["Sim", "Sim", "Não"]})
-    salvar_despensa(df_padrao, username)
     return df_padrao
 
 def salvar_despensa(df, username):
@@ -116,13 +119,22 @@ def salvar_despensa(df, username):
             df_db = df.rename(columns={"Alimento": "alimento", "Quantidade": "quantidade", "Unidade": "unidade", "Pronto/Rápido": "pronto_rapido"})
             df_db['username'] = username
             records = df_db.to_dict(orient='records')
-            for r in records: r['quantidade'] = float(r['quantidade'])
+            for r in records: r['quantidade'] = float(r.get('quantidade', 0))
             supabase.table('despensa').insert(records).execute()
     except Exception as e: pass
 
 def extrair_numero(texto):
     numeros = re.findall(r'\d+', str(texto))
     return int(numeros[0]) if numeros else 0
+
+# Convertes seguros para evitar o Crash Silencioso
+def safe_int(valor, padrao):
+    try: return int(valor) if valor is not None else padrao
+    except: return padrao
+
+def safe_float(valor, padrao):
+    try: return float(valor) if valor is not None else padrao
+    except: return padrao
 
 # --- 5. VERIFICAÇÃO DE API GEMINI ---
 api_configurada = False
@@ -192,7 +204,7 @@ if not st.session_state.logged_in and "code" in st.query_params:
 # --- 7. CSS ADAPTATIVO ---
 st.markdown(f"""
     <style>
-    :root {{ --bg-color: #F2F2F7; --card-bg: #FFFFFF; --border-color: #E5E5EA; --input-bg: #FAFAFA; --text-primary: #000000; --shadow-color: rgba(0, 0, 0, 0.04); }}
+    :root {{ --bg-color: #F2F2F7; --card-bg: #FFFFFF; --border-color: #E5E5EA; --input-bg: #FAFAFA; --text-primary: #000000; --shadow-color: rgba(0, 0, 0, 0.04); --pro-color: #FFD700; }}
     @media (prefers-color-scheme: dark) {{
         :root {{ --bg-color: #0E1117; --card-bg: #262730; --border-color: #333333; --input-bg: #1A1C23; --text-primary: #FAFAFA; --shadow-color: rgba(0, 0, 0, 0.3); }}
     }}
@@ -221,7 +233,6 @@ st.markdown(f"""
     }}
     .btn-google-nativo:hover {{ opacity: 0.8; transform: scale(0.98); }}
 
-    /* Botão Paywall */
     .btn-pro {{
         display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); color: #000 !important; border-radius: 20px; height: 55px; font-weight: 800; font-size: 18px; border: none; width: 100%; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.3);
     }}
@@ -294,13 +305,27 @@ if not st.session_state.logged_in:
 # MÓDULO 2: O APLICATIVO (LOGADO)
 # ==========================================
 else:
+    # 1. RECUPERAÇÃO BLINDADA DO PERFIL (Evita o Crash Silencioso)
+    perfil_seguro = st.session_state.perfil if isinstance(st.session_state.perfil, dict) else {}
+    
+    p_idade = safe_int(perfil_seguro.get("idade"), 30)
+    p_peso = safe_float(perfil_seguro.get("peso"), 70.0)
+    p_altura = safe_int(perfil_seguro.get("altura"), 170)
+    p_obj = str(perfil_seguro.get("objetivo") or "Emagrecimento")
+    p_atv = str(perfil_seguro.get("atividade") or "Moderada")
+    foto_salva = perfil_seguro.get("foto")
+    streak_atual = safe_int(perfil_seguro.get("streak"), 1)
+    
+    eh_pro = str(perfil_seguro.get("plano", "gratis")) == "premium"
+    badge_pro = "👑 PRO" if eh_pro else ""
+
+    # 2. LÓGICA DE GAMIFICAÇÃO PROTEGIDA
     try:
         hoje = datetime.now(fuso_local).date()
         hoje_str = hoje.strftime("%Y-%m-%d")
         ontem = hoje - timedelta(days=1)
         
-        last_login_str = st.session_state.perfil.get("last_login", "")
-        streak_atual = int(st.session_state.perfil.get("streak", 1))
+        last_login_str = str(perfil_seguro.get("last_login") or "")
 
         if last_login_str:
             last_login_date = datetime.strptime(last_login_str, "%Y-%m-%d").date()
@@ -313,13 +338,11 @@ else:
             salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
     except Exception as e: pass
 
+    # 3. INTERFACE E ABAS
     hora_atual = datetime.now(fuso_local).hour
     if hora_atual < 12: saudacao, icone_tempo = "Bom dia", "☀️"
     elif hora_atual < 18: saudacao, icone_tempo = "Boa tarde", "☕"
     else: saudacao, icone_tempo = "Boa noite", "🌙"
-
-    eh_pro = st.session_state.perfil.get("plano", "gratis") == "premium"
-    badge_pro = "👑 PRO" if eh_pro else ""
 
     col_empty, col_title, col_profile = st.columns([1, 2.5, 1], vertical_alignment="center")
     with col_title:
@@ -334,13 +357,6 @@ else:
         with st.popover("⚙️", use_container_width=True):
             tab_dados, tab_bio = st.tabs(["👤 Dados", "⚖️ Bio"])
             
-            p_idade = int(st.session_state.perfil.get("idade", 30))
-            p_peso = float(st.session_state.perfil.get("peso", 70.0))
-            p_altura = int(st.session_state.perfil.get("altura", 170))
-            p_obj = st.session_state.perfil.get("objetivo", "Emagrecimento")
-            p_atv = st.session_state.perfil.get("atividade", "Moderada")
-            foto_salva = st.session_state.perfil.get("foto", None)
-            
             with tab_dados:
                 st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
                 if foto_salva: st.markdown(f'<img src="data:image/jpeg;base64,{foto_salva}" width="80" height="80" style="border-radius:50%; object-fit:cover; margin-bottom:10px;">', unsafe_allow_html=True)
@@ -353,9 +369,11 @@ else:
 
             with tab_bio:
                 novo_peso = st.number_input("Peso (kg)", value=p_peso, step=0.5)
-                nova_altura = st.number_input("Altura (cm)", value=p_altura)
-                novo_obj = st.selectbox("Objetivo", ["Emagrecimento", "Hipertrofia", "Manutenção", "Controle Glicêmico"], index=0)
-                nova_atv = st.selectbox("Atividade", ["Sedentário", "Leve", "Moderada", "Intensa"], index=2)
+                novo_altura = st.number_input("Altura (cm)", value=p_altura)
+                objetivos = ["Emagrecimento", "Hipertrofia", "Manutenção", "Controle Glicêmico"]
+                novo_obj = st.selectbox("Objetivo", objetivos, index=objetivos.index(p_obj) if p_obj in objetivos else 0)
+                atividades = ["Sedentário", "Leve", "Moderada", "Intensa"]
+                nova_atv = st.selectbox("Atividade", atividades, index=atividades.index(p_atv) if p_atv in atividades else 2)
             
             if st.button("💾 Salvar", type="primary", use_container_width=True):
                 if nova_foto:
@@ -407,37 +425,40 @@ else:
                     st.rerun()
         with col_rem:
             with st.popover("🗑️ Deletar", use_container_width=True):
-                lista_alimentos = st.session_state.despensa["Alimento"].tolist()
-                item_remover = st.selectbox("Apagar:", lista_alimentos)
-                if st.button("Excluir", type="primary"):
-                    st.session_state.despensa = st.session_state.despensa[st.session_state.despensa["Alimento"] != item_remover]
-                    salvar_despensa(st.session_state.despensa, st.session_state.username)
-                    st.rerun()
+                if not st.session_state.despensa.empty:
+                    lista_alimentos = st.session_state.despensa["Alimento"].tolist()
+                    item_remover = st.selectbox("Apagar:", lista_alimentos)
+                    if st.button("Excluir", type="primary"):
+                        st.session_state.despensa = st.session_state.despensa[st.session_state.despensa["Alimento"] != item_remover]
+                        salvar_despensa(st.session_state.despensa, st.session_state.username)
+                        st.rerun()
+                else: st.write("Estoque vazio.")
         
         df_visual = st.session_state.despensa.copy()
-        def formatar_estoque(row): return "❌ ESGOTADO" if row["Quantidade"] <= 0 else f"{row['Quantidade']} {row['Unidade']}"
-        df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
-        df_visual.set_index("Alimento", inplace=True)
-        st.table(df_visual[["Disponível"]])
-        
-        st.divider()
-        estoque_zerado = st.session_state.despensa[st.session_state.despensa["Quantidade"] <= 0]
-        if not estoque_zerado.empty:
-            st.warning("⚠️ Lista do Mercado:")
-            texto_zap = "🛒 *Lista do Mercado - NutryAi*\n\n"
-            for index, row in estoque_zerado.iterrows(): 
-                st.write(f"- {row['Alimento']}")
-                texto_zap += f"• {row['Alimento']}\n"
-            link_whatsapp = f"https://api.whatsapp.com/send?text={urllib.parse.quote(texto_zap)}"
-            st.markdown(f'<a href="{link_whatsapp}" target="_blank" style="display:block; text-align:center; background:#25D366; color:white; padding:10px; border-radius:10px; text-decoration:none; font-weight:bold; margin-top:10px;">🟢 Compartilhar Zap</a>', unsafe_allow_html=True)
+        if not df_visual.empty:
+            def formatar_estoque(row): return "❌ ESGOTADO" if row["Quantidade"] <= 0 else f"{row['Quantidade']} {row['Unidade']}"
+            df_visual["Disponível"] = df_visual.apply(formatar_estoque, axis=1)
+            df_visual.set_index("Alimento", inplace=True)
+            st.table(df_visual[["Disponível"]])
+            
+            st.divider()
+            estoque_zerado = st.session_state.despensa[st.session_state.despensa["Quantidade"] <= 0]
+            if not estoque_zerado.empty:
+                st.warning("⚠️ Lista do Mercado:")
+                texto_zap = "🛒 *Lista do Mercado - NutryAi*\n\n"
+                for index, row in estoque_zerado.iterrows(): 
+                    st.write(f"- {row['Alimento']}")
+                    texto_zap += f"• {row['Alimento']}\n"
+                link_whatsapp = f"https://api.whatsapp.com/send?text={urllib.parse.quote(texto_zap)}"
+                st.markdown(f'<a href="{link_whatsapp}" class="btn-whatsapp" target="_blank">🟢 Compartilhar Zap</a>', unsafe_allow_html=True)
+        else:
+            st.info("Nenhum alimento cadastrado.")
 
     with tab3:
         if st.session_state.cardapio_atual is None:
             if st.button("⚡ Gerar Cardápio de Hoje", use_container_width=True, type="primary"):
                 with st.spinner("Calculando com a IA..."):
                     despensa_ativa = st.session_state.despensa[st.session_state.despensa["Quantidade"] > 0]
-                    
-                    # PROMPT CORRIGIDO E PROTEGIDO
                     prompt = f"""
                     Nutricionista Clínico especialista. Crie o cardápio real de hoje usando APENAS O ESTOQUE.
                     BIOMETRIA: {dados_perfil_ia}
@@ -473,14 +494,15 @@ else:
 
     with tab4:
         st.markdown("### 📈 Sua Evolução")
-        historico = st.session_state.perfil.get("historico_peso", [])
+        historico = perfil_seguro.get("historico_peso", [])
         
-        if historico:
+        if historico and isinstance(historico, list):
             df_hist = pd.DataFrame(historico)
             df_hist['data'] = pd.to_datetime(df_hist['data'])
             df_hist = df_hist.set_index('data')
             st.line_chart(df_hist, y='peso', color="#007AFF")
         else:
+            historico = []
             st.info("Nenhum peso registrado ainda.")
             
         c_peso, c_btn = st.columns([2, 1], vertical_alignment="bottom")
@@ -494,7 +516,6 @@ else:
                 st.toast("✅ Peso registrado!")
                 st.rerun()
 
-    # --- O PAYWALL (FREEMIUM) ---
     with tab5:
         if not eh_pro:
             st.markdown("""
