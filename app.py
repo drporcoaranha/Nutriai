@@ -308,7 +308,7 @@ st.markdown(f"""
     .bg-carb {{ background: linear-gradient(90deg, #007AFF, #5AC8FA); }} 
     .bg-gord {{ background: linear-gradient(90deg, #AF52DE, #FF2D55); }}
     
-    /* 🚨 A SOLUÇÃO DO GRÁFICO (Remove o sequestro do toque na tela) 🚨 */
+    /* GRÁFICO SEM SEQUESTRO DE TELA */
     [data-testid="stArrowVegaLiteChart"] {{
         pointer-events: none !important; 
         touch-action: none !important;
@@ -448,7 +448,7 @@ else:
                         img.convert('RGB').save(buffered, format="JPEG")
                         foto_salva = base64.b64encode(buffered.getvalue()).decode("utf-8")
                     
-                    st.session_state.perfil.update({"idade": nova_idade, "peso": novo_peso, "altura": nova_altura, "objetivo": novo_obj, "atividade": nova_atv, "foto": foto_salva})
+                    st.session_state.perfil.update({"idade": nova_idade, "peso": novo_peso, "altura": novo_altura, "objetivo": novo_obj, "atividade": nova_atv, "foto": foto_salva})
                     st.session_state.nome_usuario = novo_nome
                     salvar_perfil(st.session_state.username, novo_nome, st.session_state.perfil)
                     st.rerun() 
