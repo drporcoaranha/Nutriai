@@ -187,7 +187,7 @@ if not st.session_state.logged_in and "code" in st.query_params:
         else: st.query_params.clear()
     except Exception as e: pass
 
-# --- 7. UX 8.0: CSS PREMIUM (APPLE STYLE) ---
+# --- 7. UX 8.1: CSS PREMIUM + ACESSIBILIDADE ALTO CONTRASTE ---
 st.markdown(f"""
     <style>
     /* Variáveis Globais de Cor */
@@ -195,10 +195,11 @@ st.markdown(f"""
         --bg-color: #F5F5F7; 
         --card-bg: #FFFFFF; 
         --border-color: #E5E5EA; 
-        --input-bg: #F2F2F7; 
+        --input-border: #C7C7CC; /* Nova borda mais escura para os inputs */
+        --input-bg: #FAFAFA; /* Fundo levemente contrastante */
         --text-primary: #1C1C1E; 
         --text-secondary: #8E8E93;
-        --shadow-color: rgba(0, 0, 0, 0.03); 
+        --shadow-color: rgba(0, 0, 0, 0.04); 
         --accent-color: #34C759;
         --accent-gradient: linear-gradient(135deg, #34C759 0%, #32D74B 100%);
     }}
@@ -207,6 +208,7 @@ st.markdown(f"""
             --bg-color: #000000; 
             --card-bg: #1C1C1E; 
             --border-color: #2C2C2E; 
+            --input-border: #48484A; /* Nova borda forte para inputs no escuro */
             --input-bg: #2C2C2E; 
             --text-primary: #F2F2F7; 
             --text-secondary: #8E8E93;
@@ -233,16 +235,22 @@ st.markdown(f"""
         transition: transform 0.2s ease;
     }}
     
-    /* Inputs Estilo Apple */
-    div[data-testid="stTextInput"] input, div[data-testid="stNumberInput"] input {{
-        border: 1px solid var(--border-color) !important; 
-        border-radius: 12px !important; 
-        padding: 14px 16px !important; 
-        background-color: var(--input-bg) !important; 
-        color: var(--text-primary) !important;
-        font-size: 16px !important;
+    /* 🔥 SOLUÇÃO: ALTO CONTRASTE PARA TODOS OS CAMPOS DE OPÇÃO E HORÁRIO 🔥 */
+    div[data-baseweb="input"] > div, 
+    div[data-baseweb="select"] > div {{
+        border: 1.5px solid var(--input-border) !important;
+        background-color: var(--input-bg) !important;
+        border-radius: 12px !important;
+        transition: all 0.2s ease;
     }}
-    div[data-testid="stTextInput"] input:focus {{ border-color: var(--accent-color) !important; box-shadow: 0 0 0 2px rgba(52,199,89,0.2) !important; }}
+    div[data-baseweb="input"] > div:focus-within, 
+    div[data-baseweb="select"] > div:focus-within {{
+        border-color: var(--accent-color) !important;
+        box-shadow: 0 0 0 2px rgba(52,199,89,0.2) !important;
+    }}
+    
+    /* Força os textos digitados a ficarem visíveis */
+    input {{ color: var(--text-primary) !important; font-size: 16px !important; padding: 12px 14px !important; }}
     
     /* Botões Refinados */
     div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{
@@ -250,7 +258,7 @@ st.markdown(f"""
         height: 50px !important; 
         font-weight: 700 !important; 
         font-size: 16px !important; 
-        border: 1px solid var(--border-color) !important; 
+        border: 1px solid var(--input-border) !important; /* Borda mais visível nos botões simples */
         background-color: var(--card-bg) !important; 
         color: var(--text-primary) !important;
         transition: all 0.2s ease-in-out !important;
@@ -298,7 +306,7 @@ st.markdown(f"""
 
     /* Botões Customizados */
     .btn-google-nativo {{
-        display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 16px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease; box-shadow: 0 2px 8px var(--shadow-color);
+        display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1.5px solid var(--input-border); border-radius: 16px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease; box-shadow: 0 2px 8px var(--shadow-color);
     }}
     .btn-google-nativo:hover {{ transform: scale(0.98); text-decoration: none; color: var(--text-primary); }}
 
@@ -328,7 +336,7 @@ st.markdown(f"""
     .adapt-text {{ color: var(--text-primary) !important; }}
     .sub-text {{ color: var(--text-secondary) !important; font-size: 0.95rem; }}
     
-    /* Logotipo HTML/CSS Avançado */
+    /* Logotipo */
     .brand-container {{
         display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 35px; margin-top: 10px;
     }}
@@ -349,7 +357,6 @@ st.markdown(f"""
 # MÓDULO 1: TELA DE LOGIN
 # ==========================================
 if not st.session_state.logged_in:
-    # --- NOVO LOGO PREMIUM ---
     st.markdown("""
         <div class="brand-container">
             <div class="brand-icon-box"><span class="brand-icon">🍏</span></div>
@@ -427,7 +434,6 @@ else:
         elif hora_atual < 18: saudacao = "Boa tarde"
         else: saudacao = "Boa noite"
 
-        # HEADER PREMIUM REDESENHADO
         col_text, col_profile = st.columns([3, 1], vertical_alignment="center")
         with col_text:
             badge_html = "<span style='background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: black; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;'>PRO</span>" if eh_pro else ""
@@ -480,7 +486,6 @@ else:
 
         dados_perfil_ia = f"{p_idade} anos, {p_peso}kg, {p_altura}cm. Objetivo: {p_obj}. Ativ: {p_atv}."
 
-        # ABAS COM EMOJIS (Transformadas pelo CSS em pílulas IOS)
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🕒", "📦", "🍽️", "📈", "👑", "💬"])
 
         with tab1:
@@ -757,7 +762,7 @@ else:
                         with st.chat_message("assistant"):
                             with st.spinner("A Nutri está digitando..."):
                                 try:
-                                    conteudo_ia = [f"Você é a NutryAi, Nutricionista Clínica. O paciente tem o seguinte perfil: {dados_perfil_ia}. Avalie impactos na insulina.", prompt_chat]
+                                    conteudo_ia = [f"Você é a NutryAi, Nutricionista Clínica. O paciente tem o seguinte perfil: {dados_perfil_ia}. Avalie impactos na insulina se o paciente perguntar sobre alimentos ou fotos.", prompt_chat]
                                     if foto_upload:
                                         imagem_pil = Image.open(foto_upload)
                                         conteudo_ia.append(imagem_pil)
