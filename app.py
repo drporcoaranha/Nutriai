@@ -213,7 +213,7 @@ if not st.session_state.logged_in and "code" in st.query_params:
                     st.session_state.nome_usuario = user_db.get('nome', 'Usuário')
                     st.session_state.perfil = user_db.get("perfil") if isinstance(user_db.get("perfil"), dict) else {}
                     st.session_state.despensa = carregar_despensa(username_google)
-                    if cookies_enabled: cookie_controller.set("nutriai_auth_user", username_google, max_age=30*86400) # Salva por 30 dias
+                    if cookies_enabled: cookie_controller.set("nutriai_auth_user", username_google, max_age=30*86400)
                 except Exception as e: pass
                 st.query_params.clear()
                 st.rerun()
@@ -508,7 +508,6 @@ else:
         with tab3:
             st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🍽️ Plano Alimentar IA</h3>", unsafe_allow_html=True)
             
-            # Checagem Inteligente de Empty States
             tem_rotina = st.session_state.perfil.get("rotina_preenchida", False)
             df_temp_check = st.session_state.despensa.copy()
             if not df_temp_check.empty:
@@ -550,7 +549,6 @@ else:
                                     plano_json = json.loads(re.search(r'\{.*\}', resp, re.DOTALL).group(0))
                                     st.session_state.cardapio_atual = plano_json
                                     
-                                    # SALVA NO BANCO DE DADOS NA HORA!
                                     st.session_state.perfil["cardapio_salvo"] = {
                                         "data": hoje_str,
                                         "plan": plano_json,
@@ -560,13 +558,13 @@ else:
                                     st.rerun()
                                 except Exception as e: st.error(f"Erro na IA: {e}")
                 else:
-                    st.warning("⚠️ Precisamos preparar o terreno antes da IA trabalhar.")
+                    st.warning("✨ Falta pouco para a IA assumir o controle!")
                     
                     if not tem_rotina:
                         with st.container(border=True):
-                            st.markdown("#### 🕒 1. Faltam seus Horários")
-                            st.write("A IA precisa saber que horas você acorda para montar os lanches.")
-                            if st.button("Salvar Rotina Padrão (Das 07h às 23h)", use_container_width=True):
+                            st.markdown("<h4 class='adapt-text'>🕒 1. Que horas o seu dia começa?</h4>", unsafe_allow_html=True)
+                            st.write("A IA precisa conhecer sua rotina para encaixar os lanches nos melhores momentos.")
+                            if st.button("Usar Horários Padrões", use_container_width=True):
                                 st.session_state.perfil["rotina"] = {"acordar": "07:00", "dormir": "23:00", "trab_inicio": "08:00", "trab_fim": "18:00", "trans_inicio": "18:00", "trans_fim": "19:00", "treino_inicio": "19:00", "treino_fim": "20:00", "estudo_inicio": "20:30", "estudo_fim": "22:00"}
                                 st.session_state.perfil["tempo_preparo"] = 30
                                 st.session_state.perfil["rotina_preenchida"] = True
@@ -575,11 +573,11 @@ else:
                                 
                     if not tem_estoque:
                         with st.container(border=True):
-                            st.markdown("#### 📦 2. Falta Comida no Estoque")
-                            st.write("A IA não pode inventar comida. Adicione pelo menos 1 item para começarmos:")
-                            n_nome = st.text_input("Nome do Alimento", key="fast_alimento")
+                            st.markdown("<h4 class='adapt-text'>🛒 2. O que tem na geladeira?</h4>", unsafe_allow_html=True)
+                            st.write("Para montarmos pratos deliciosos e práticos, me conte pelo menos um alimento que você tem disponível hoje:")
+                            n_nome = st.text_input("Nome do Alimento", key="fast_alimento", placeholder="Ex: Ovos, Aveia, Arroz...")
                             n_qtd = st.number_input("Quantidade", min_value=1.0, step=1.0, key="fast_qtd")
-                            if st.button("➕ Adicionar à Despensa", type="primary", use_container_width=True):
+                            if st.button("➕ Salvar na Despensa", type="primary", use_container_width=True):
                                 if n_nome:
                                     novo_item = pd.DataFrame({"Alimento": [n_nome], "Quantidade": [float(n_qtd)], "Unidade": ["g"], "Pronto/Rápido": ["Não"]})
                                     if st.session_state.despensa.empty: st.session_state.despensa = novo_item
@@ -630,7 +628,6 @@ else:
                         with c_chk:
                             if st.checkbox("Baixa", key=f"c_{i}", value=ja_cons, disabled=ja_cons, label_visibility="collapsed"):
                                 st.session_state.consumidos.add(id_ref)
-                                # SALVA O PROGRESSO NO BANCO NA HORA!
                                 st.session_state.perfil["cardapio_salvo"]["consumidos"] = list(st.session_state.consumidos)
                                 salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                                 
