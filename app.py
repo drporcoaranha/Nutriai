@@ -91,7 +91,6 @@ def salvar_perfil(username, nome_atualizado, perfil_data):
     except Exception as e: pass
 
 def carregar_despensa(username):
-    # BLINDAGEM 1: Retorna ESTRITAMENTE vazio se não achar nada
     df_vazio = pd.DataFrame(columns=['Alimento', 'Quantidade', 'Unidade', 'Pronto/Rápido'])
     try:
         res = supabase.table('despensa').select('*').eq('username', username).execute()
@@ -99,7 +98,6 @@ def carregar_despensa(username):
             df = pd.DataFrame(res.data)
             if 'quantidade' in df.columns: df['quantidade'] = pd.to_numeric(df['quantidade'], errors='coerce').fillna(0)
             df = df.rename(columns={"alimento": "Alimento", "quantidade": "Quantidade", "unidade": "Unidade", "pronto_rapido": "Pronto/Rápido"})
-            # Garante que as colunas existem
             for col in ['Alimento', 'Quantidade', 'Unidade', 'Pronto/Rápido']:
                 if col not in df.columns: df[col] = "" if col != 'Quantidade' else 0.0
             return df[['Alimento', 'Quantidade', 'Unidade', 'Pronto/Rápido']]
@@ -147,7 +145,7 @@ if "GEMINI_API_KEY" in st.secrets:
         api_configurada = True
     except Exception as e: pass
 
-# --- 6. INICIALIZAÇÃO DE SESSÃO LIMPA E ESTÁVEL ---
+# --- 6. INICIALIZAÇÃO DE SESSÃO LIMPA ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'username' not in st.session_state: st.session_state.username = None
 if 'nome_usuario' not in st.session_state: st.session_state.nome_usuario = None
@@ -159,10 +157,8 @@ if 'consumidos' not in st.session_state: st.session_state.consumidos = set()
 if 'chat_history' not in st.session_state: st.session_state.chat_history = []
 if 'sessao_iniciada' not in st.session_state: st.session_state.sessao_iniciada = False
 
-# BLINDAGEM 2: Logout limpo e direto, sem cookies fantasmas
 def fazer_logout():
-    for key in list(st.session_state.keys()): 
-        del st.session_state[key]
+    for key in list(st.session_state.keys()): del st.session_state[key]
     st.query_params.clear() 
     st.rerun()
 
@@ -171,26 +167,21 @@ if not st.session_state.logged_in and "code" in st.query_params:
     st.info("🔄 Conectando com o Google...")
     codigo_autorizacao = st.query_params["code"]
     st.query_params.clear() 
-    
     try:
         token_url = "https://oauth2.googleapis.com/token"
         token_data = {"code": codigo_autorizacao, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "redirect_uri": REDIRECT_URI, "grant_type": "authorization_code"}
         res = requests.post(token_url, data=token_data)
-        
         if res.status_code == 200:
             access_token = res.json().get("access_token")
             user_res = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
-            
             if user_res.status_code == 200:
                 google_user = user_res.json()
                 username_google = google_user.get("email") 
                 nome_google = google_user.get("given_name", "Usuário") 
-                
                 res_db = supabase.table('users').select('*').eq('username', username_google).execute()
                 if len(res_db.data) == 0:
                     criar_conta(username_google, nome_google, "google_sso_senha_dummy")
                     res_db = supabase.table('users').select('*').eq('username', username_google).execute()
-                
                 user_db = res_db.data[0]
                 st.session_state.logged_in = True
                 st.session_state.username = username_google
@@ -198,8 +189,7 @@ if not st.session_state.logged_in and "code" in st.query_params:
                 st.session_state.perfil = user_db.get("perfil") if isinstance(user_db.get("perfil"), dict) else {}
                 st.session_state.despensa = carregar_despensa(username_google)
                 st.rerun() 
-    except Exception as e: 
-        st.error("Falha ao conectar com o Google.")
+    except Exception as e: st.error("Falha ao conectar com o Google.")
 
 # --- 7. UX CSS PREMIUM ---
 st.markdown(f"""
@@ -237,49 +227,52 @@ st.markdown(f"""
 # MÓDULO 1: TELA DE LOGIN
 # ==========================================
 if not st.session_state.logged_in:
-    st.markdown("""
-        <div class="brand-container">
-            <div class="brand-icon-box"><span class="brand-icon">🍏</span></div>
-            <h1 class="brand-text">NutryAi</h1>
-            <p class="sub-text" style="margin-top: 8px;">Sua inteligência nutricional.</p>
-        </div>
-    """, unsafe_allow_html=True)
+    
+    if "code" not in st.query_params:
+        with st.container():
+            st.markdown("""
+                <div class="brand-container">
+                    <div class="brand-icon-box"><span class="brand-icon">🍏</span></div>
+                    <h1 class="brand-text">NutryAi</h1>
+                    <p class="sub-text" style="margin-top: 8px;">Sua inteligência nutricional.</p>
+                </div>
+            """, unsafe_allow_html=True)
 
-    with st.container(border=True):
-        st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse sua conta</h4>", unsafe_allow_html=True)
-        login_user = st.text_input("Usuário", placeholder="Ex: pablo", label_visibility="collapsed")
-        login_senha = st.text_input("Senha", type="password", placeholder="Sua senha secreta", label_visibility="collapsed")
-        
-        st.write("")
-        if st.button("Entrar no App", use_container_width=True, type="primary"):
-            if login_user and login_senha:
-                with st.spinner("🔄 Conectando aos servidores seguros..."):
-                    dados_usuario = validar_login(login_user, login_senha)
-                    if dados_usuario:
-                        st.session_state.logged_in = True
-                        st.session_state.username = login_user
-                        st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
-                        perfil_carregado = dados_usuario.get("perfil")
-                        st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
-                        st.session_state.despensa = carregar_despensa(login_user)
-                        st.rerun()
-                    else: st.error("Usuário ou senha incorretos.")
-            else: st.warning("Preencha todos os campos.")
+            with st.container(border=True):
+                st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse sua conta</h4>", unsafe_allow_html=True)
+                login_user = st.text_input("Usuário", placeholder="Ex: pablo", label_visibility="collapsed")
+                login_senha = st.text_input("Senha", type="password", placeholder="Sua senha secreta", label_visibility="collapsed")
                 
-        st.markdown("<div style='text-align: center; margin: 5px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
-        if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
+                st.write("")
+                if st.button("Entrar no App", use_container_width=True, type="primary"):
+                    if login_user and login_senha:
+                        with st.spinner("🔄 Conectando aos servidores seguros..."):
+                            dados_usuario = validar_login(login_user, login_senha)
+                            if dados_usuario:
+                                st.session_state.logged_in = True
+                                st.session_state.username = login_user
+                                st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
+                                perfil_carregado = dados_usuario.get("perfil")
+                                st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
+                                st.session_state.despensa = carregar_despensa(login_user)
+                                st.rerun()
+                            else: st.error("Usuário ou senha incorretos.")
+                    else: st.warning("Preencha todos os campos.")
+                        
+                st.markdown("<div style='text-align: center; margin: 5px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
+                if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
 
-    st.write("")
-    with st.expander("Não tem uma conta? Clique aqui para criar"):
-        cad_nome = st.text_input("Como quer ser chamado?")
-        cad_user = st.text_input("Nome de usuário (ex: pablo)").lower()
-        cad_senha = st.text_input("Crie uma senha", type="password")
-        if st.button("Criar Conta", use_container_width=True):
-            if criar_conta(cad_user, cad_nome, cad_senha): st.success("Conta criada! Feche essa aba e faça o login acima.")
-            else: st.error("Usuário já existe no sistema.")
+            st.write("")
+            with st.expander("Não tem uma conta? Clique aqui para criar"):
+                cad_nome = st.text_input("Como quer ser chamado?")
+                cad_user = st.text_input("Nome de usuário (ex: pablo)").lower()
+                cad_senha = st.text_input("Crie uma senha", type="password")
+                if st.button("Criar Conta", use_container_width=True):
+                    if criar_conta(cad_user, cad_nome, cad_senha): st.success("Conta criada! Feche essa aba e faça o login acima.")
+                    else: st.error("Usuário já existe no sistema.")
 
 # ==========================================
-# MÓDULO 2: O APLICATIVO (LOGADO E ESTÁVEL)
+# MÓDULO 2: O APLICATIVO (LOGADO E ISOLADO)
 # ==========================================
 else:
     @st.dialog("➕ Adicionar Alimento")
@@ -585,7 +578,6 @@ else:
 
             if st.session_state.cardapio_atual is not None:
                 resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
-                refeicoes = st.session_state.cardapio_atual.get("refeicoes", [])
                 
                 tot_kcal = extrair_numero(resumo.get('calorias_totais', 0))
                 tot_prot = extrair_numero(resumo.get('proteinas_totais', 0))
@@ -593,12 +585,18 @@ else:
                 tot_gord = extrair_numero(resumo.get('gorduras_totais', 0))
                 cons_kcal = cons_prot = cons_carb = cons_gord = 0
                 
-                for i, ref in enumerate(refeicoes):
-                    if f"ref_{i}" in st.session_state.consumidos:
-                        cons_kcal += extrair_numero(ref.get('macros', {}).get('calorias', 0))
-                        cons_prot += extrair_numero(ref.get('macros', {}).get('proteinas', 0))
-                        cons_carb += extrair_numero(ref.get('macros', {}).get('carbos', 0))
-                        cons_gord += extrair_numero(ref.get('macros', {}).get('gorduras', 0))
+                # 🚨 BLINDAGEM DE RENDERIZAÇÃO DAS REFEIÇÕES 🚨
+                try:
+                    refeicoes = st.session_state.cardapio_atual.get("refeicoes", [])
+                    if isinstance(refeicoes, list):
+                        for i, ref in enumerate(refeicoes):
+                            if isinstance(ref, dict) and f"ref_{i}" in st.session_state.consumidos:
+                                cons_kcal += extrair_numero(ref.get('macros', {}).get('calorias', 0))
+                                cons_prot += extrair_numero(ref.get('macros', {}).get('proteinas', 0))
+                                cons_carb += extrair_numero(ref.get('macros', {}).get('carbos', 0))
+                                cons_gord += extrair_numero(ref.get('macros', {}).get('gorduras', 0))
+                except Exception:
+                    pass
                         
                 pct_kcal = min(100, int((cons_kcal / tot_kcal * 100) if tot_kcal > 0 else 0))
                 pct_prot = min(100, int((cons_prot / tot_prot * 100) if tot_prot > 0 else 0))
@@ -614,38 +612,63 @@ else:
                     c4.markdown(f"<span style='font-size: 0.9rem; font-weight: 600; color: var(--text-primary);'>🥑 Gord</span><br><span style='font-size: 0.8rem; color: var(--text-secondary);'>{cons_gord}/{tot_gord}g</span><div class='macro-bar-container'><div class='macro-bar-fill bg-gord' style='width: {pct_gord}%;'></div></div>", unsafe_allow_html=True)
 
                 st.write("")
-                for i, ref in enumerate(refeicoes):
-                    id_ref = f"ref_{i}"
-                    ja_cons = id_ref in st.session_state.consumidos
-                    with st.container(border=True):
-                        c_txt, c_chk = st.columns([4, 1], vertical_alignment="center")
-                        with c_txt:
-                            cor_bolinha = "🟢" if ja_cons else "⚪"
-                            st.markdown(f"<span style='font-weight: 700; font-size: 1.1rem; color: var(--text-primary);'>{cor_bolinha} {ref.get('hora','')} • {ref.get('nome','')}</span>", unsafe_allow_html=True)
-                            st.markdown(f"<p style='color: var(--text-primary); margin: 5px 0 0 0;'>🍽️ {ref.get('ingredientes','')}</p>", unsafe_allow_html=True)
-                        with c_chk:
-                            # 🚨 BUG DO TRAVAMENTO RESOLVIDO: Chave simples e indestrutível
-                            if st.checkbox("Baixa", key=f"check_{i}", value=ja_cons, disabled=ja_cons, label_visibility="collapsed"):
-                                st.session_state.consumidos.add(id_ref)
-                                st.session_state.perfil["cardapio_salvo"]["consumidos"] = list(st.session_state.consumidos)
-                                salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                
+                # 🚨 LOOP DE REFEIÇÕES PROTEGIDO CONTRA ERROS FATAIS 🚨
+                try:
+                    refeicoes = st.session_state.cardapio_atual.get("refeicoes", [])
+                    if isinstance(refeicoes, list):
+                        for i, ref in enumerate(refeicoes):
+                            if not isinstance(ref, dict): continue
+                            
+                            id_ref = f"ref_{i}"
+                            ja_cons = id_ref in st.session_state.consumidos
+                            with st.container(border=True):
+                                c_txt, c_chk = st.columns([4, 1], vertical_alignment="center")
+                                with c_txt:
+                                    cor_bolinha = "🟢" if ja_cons else "⚪"
+                                    st.markdown(f"<span style='font-weight: 700; font-size: 1.1rem; color: var(--text-primary);'>{cor_bolinha} {ref.get('hora','')} • {ref.get('nome','')}</span>", unsafe_allow_html=True)
+                                    st.markdown(f"<p style='color: var(--text-primary); margin: 5px 0 0 0;'>🍽️ {ref.get('ingredientes','')}</p>", unsafe_allow_html=True)
+                                with c_chk:
+                                    # Chave de checkbox indestrutível baseada na data
+                                    if st.checkbox("Baixa", key=f"chk_meal_{i}_{hoje_str}", value=ja_cons, disabled=ja_cons, label_visibility="collapsed"):
+                                        st.session_state.consumidos.add(id_ref)
+                                        
+                                        # Evita KeyError na hora de salvar o consumo
+                                        if "cardapio_salvo" not in st.session_state.perfil or not isinstance(st.session_state.perfil["cardapio_salvo"], dict):
+                                            st.session_state.perfil["cardapio_salvo"] = {}
+                                            
+                                        st.session_state.perfil["cardapio_salvo"]["consumidos"] = list(st.session_state.consumidos)
+                                        salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                                        
+                                        # Evita KeyError na hora de descontar da despensa
+                                        try:
+                                            uso = ref.get("uso_despensa", [])
+                                            if isinstance(uso, list):
+                                                for item in uso:
+                                                    if isinstance(item, dict):
+                                                        nome_alimento = item.get("nome_exato")
+                                                        if not st.session_state.despensa.empty and nome_alimento in st.session_state.despensa['Alimento'].values:
+                                                            idx = st.session_state.despensa.index[st.session_state.despensa['Alimento'] == nome_alimento].tolist()[0]
+                                                            qtd_atual = float(st.session_state.despensa.at[idx, 'Quantidade'])
+                                                            qtd_des = float(item.get("qtd_descontada", 0))
+                                                            st.session_state.despensa.at[idx, 'Quantidade'] = max(0.0, qtd_atual - qtd_des)
+                                                salvar_despensa(st.session_state.despensa, st.session_state.username)
+                                        except Exception:
+                                            pass # Se der erro no desconto, o app ignora e segue a vida
+                                            
+                                        st.rerun()
+                except Exception as meal_error:
+                    st.warning("Houve um pequeno desajuste na leitura da sua refeição pela IA, mas você pode limpar o plano abaixo.")
                                 
-                                for item in ref.get("uso_despensa", []):
-                                    if not st.session_state.despensa.empty:
-                                        idx = st.session_state.despensa.index[st.session_state.despensa['Alimento'] == item.get("nome_exato")].tolist()
-                                        if idx: 
-                                            qtd_atual = float(st.session_state.despensa.at[idx[0], 'Quantidade'])
-                                            qtd_descontada = float(item.get("qtd_descontada", 0))
-                                            st.session_state.despensa.at[idx[0], 'Quantidade'] = max(0.0, qtd_atual - qtd_descontada)
-                                salvar_despensa(st.session_state.despensa, st.session_state.username)
-                                st.rerun()
-                                
-                # 🚨 BUG DA LIMPEZA RESOLVIDO: Trata o banco de dados como vazio com segurança
+                # 🚨 BOTÃO DESCARTAR SEMPRE VISÍVEL, FORA DA ZONA DE PERIGO 🚨
+                st.write("")
                 if st.button("🗑️ Descartar Plano e Criar Outro", use_container_width=True):
                     st.session_state.cardapio_atual = None
                     st.session_state.consumidos = set()
                     st.session_state.perfil["cardapio_salvo"] = {}
                     salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                    st.toast("🗑️ Plano descartado com sucesso!")
+                    time.sleep(0.5)
                     st.rerun()
 
         with tab4:
