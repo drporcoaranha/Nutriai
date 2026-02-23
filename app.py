@@ -134,7 +134,6 @@ api_configurada = False
 if "GEMINI_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        # Alterado para a versão 1.5 flash para garantir compatibilidade e evitar erros
         modelo = genai.GenerativeModel('gemini-1.5-flash') 
         api_configurada = True
     except Exception as e: pass
@@ -155,8 +154,9 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- INTERCEPTADOR DO GOOGLE ---
+# --- INTERCEPTADOR DO GOOGLE (COM FEEDBACK VISUAL) ---
 if not st.session_state.logged_in and "code" in st.query_params:
+    st.info("🔄 Autenticando com o Google... Preparando seu painel.")
     codigo_autorizacao = st.query_params["code"]
     client_id_limpo = str(GOOGLE_CLIENT_ID).strip().replace('"', '').replace("'", "")
     client_secret_limpo = str(GOOGLE_CLIENT_SECRET).strip().replace('"', '').replace("'", "")
@@ -261,17 +261,19 @@ if not st.session_state.logged_in:
         
         if st.button("Entrar", use_container_width=True, type="primary"):
             if login_user and login_senha:
-                dados_usuario = validar_login(login_user, login_senha)
-                if dados_usuario:
-                    st.session_state.logged_in = True
-                    st.session_state.username = login_user
-                    st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
-                    
-                    perfil_carregado = dados_usuario.get("perfil")
-                    st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
-                    st.session_state.despensa = carregar_despensa(login_user)
-                    st.rerun()
-                else: st.error("Usuário ou senha incorretos.")
+                # UX: SPINNER DE CARREGAMENTO ADICIONADO AQUI
+                with st.spinner("🔄 Conectando aos servidores seguros... isso leva alguns segundos."):
+                    dados_usuario = validar_login(login_user, login_senha)
+                    if dados_usuario:
+                        st.session_state.logged_in = True
+                        st.session_state.username = login_user
+                        st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
+                        
+                        perfil_carregado = dados_usuario.get("perfil")
+                        st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
+                        st.session_state.despensa = carregar_despensa(login_user)
+                        st.rerun()
+                    else: st.error("Usuário ou senha incorretos.")
             else: st.warning("Preencha todos os campos.")
                 
         st.markdown("<div style='text-align: center; margin: 15px 0; color: #8E8E93;'>ou</div>", unsafe_allow_html=True)
@@ -435,8 +437,6 @@ else:
                 st.table(df_visual[["Disponível"]])
                 
                 st.divider()
-                
-                # --- A VACINA DO PANDAS ---
                 qtd_numerica = pd.to_numeric(st.session_state.despensa['Quantidade'], errors='coerce').fillna(0)
                 estoque_zerado = st.session_state.despensa[qtd_numerica <= 0]
                 
