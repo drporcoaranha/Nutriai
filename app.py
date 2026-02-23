@@ -146,7 +146,7 @@ if "GEMINI_API_KEY" in st.secrets:
         api_configurada = True
     except Exception as e: pass
 
-# --- 6. INICIALIZAÇÃO DE SESSÃO ---
+# --- 6. INICIALIZAÇÃO DE SESSÃO LIMPA ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'username' not in st.session_state: st.session_state.username = None
 if 'nome_usuario' not in st.session_state: st.session_state.nome_usuario = None
@@ -163,7 +163,7 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- INTERCEPTADOR DO GOOGLE SEGURO ---
+# --- INTERCEPTADOR DO GOOGLE ---
 if not st.session_state.logged_in and "code" in st.query_params:
     st.info("🔄 Conectando com o Google...")
     codigo_autorizacao = st.query_params["code"]
@@ -330,7 +330,6 @@ else:
         cardapio_banco = perfil_seguro.get("cardapio_salvo", {})
         if cardapio_banco.get("data") == hoje_str:
             st.session_state.cardapio_atual = cardapio_banco.get("plan")
-            # Garante que consumidos é sempre um set limpo
             cons_list = cardapio_banco.get("consumidos", [])
             st.session_state.consumidos = set(cons_list) if isinstance(cons_list, list) else set()
         st.session_state.sessao_iniciada = True
@@ -490,7 +489,6 @@ else:
 
     with tab3:
         # 🚨 BOTÃO DE PÂNICO ISOLADO NO TOPO 🚨
-        # Este botão vai aparecer *antes* do código de desenho das refeições e vai limpar qualquer dado corrompido
         if st.session_state.cardapio_atual is not None:
             c1, c2 = st.columns([2.5, 1], vertical_alignment="center")
             c1.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 0;'>🍽️ Plano Alimentar IA</h3>", unsafe_allow_html=True)
@@ -600,7 +598,6 @@ else:
                 
                 cons_kcal = cons_prot = cons_carb = cons_gord = 0
                 
-                # Garante que consumidos seja um SET válido para não quebrar a página
                 if not isinstance(st.session_state.consumidos, set):
                     st.session_state.consumidos = set()
 
@@ -640,7 +637,12 @@ else:
                                 st.markdown(f"<span style='font-weight: 700; font-size: 1.1rem; color: var(--text-primary);'>{cor_bolinha} {ref.get('hora','')} • {ref.get('nome','')}</span>", unsafe_allow_html=True)
                                 st.markdown(f"<p style='color: var(--text-primary); margin: 5px 0 0 0;'>🍽️ {ref.get('ingredientes','')}</p>", unsafe_allow_html=True)
                             with c_chk:
-                                if st.checkbox("Baixa", key=f"chk_meal_{i}", value=ja_cons, disabled=ja_cons, label_visibility="collapsed"):
+                                # 🚨 SOLUÇÃO DO LOOP INFINITO (CONGELAMENTO DE TELA) 🚨
+                                foi_marcado = st.checkbox("Baixa", key=f"chk_meal_{i}_{hoje_str}", value=ja_cons, disabled=ja_cons, label_visibility="collapsed")
+                                
+                                # Só executa a rotina de salvar e atualizar se o usuário ACABOU de marcar. 
+                                # Se já estava marcado (ja_cons = True), ele ignora e não entra no loop infinito!
+                                if foi_marcado and not ja_cons:
                                     st.session_state.consumidos.add(id_ref)
                                     
                                     if "cardapio_salvo" not in st.session_state.perfil or not isinstance(st.session_state.perfil["cardapio_salvo"], dict):
@@ -665,8 +667,7 @@ else:
                                     st.rerun()
 
             except Exception as e:
-                # SE CAIR UM METEORO AQUI, ELE MOSTRA A MENSAGEM, MAS NÃO DERRUBA AS OUTRAS ABAS!
-                st.error("A Inteligência Artificial estruturou mal o seu cardápio, mas o aplicativo bloqueou a falha. Clique em 'Limpar Tudo' acima para recriar o dia.")
+                st.error("A Inteligência Artificial estruturou mal o seu cardápio. Clique em 'Limpar Tudo' no topo da página para recriar.")
 
     with tab4:
         st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>📈 Gráfico de Evolução</h3>", unsafe_allow_html=True)
