@@ -306,6 +306,54 @@ if not st.session_state.logged_in:
 # MÓDULO 2: O APLICATIVO (LOGADO)
 # ==========================================
 else:
+    # ---------------------------------------------------------
+    # MODAIS DE ESTOQUE (Fecham sozinhos após o sucesso!)
+    # ---------------------------------------------------------
+    @st.dialog("➕ Adicionar Alimento")
+    def modal_adicionar():
+        n_nome = st.text_input("Qual o alimento?")
+        n_qtd = st.number_input("Quantidade", min_value=0.1, step=1.0)
+        n_unidade = st.selectbox("Unidade de Medida", ["g", "kg", "ml", "L", "un", "dose", "colher"])
+        n_pronto = st.radio("Consumo Rápido?", ["Não", "Sim"], horizontal=True)
+        if st.button("Guardar no Estoque", type="primary", use_container_width=True):
+            if n_nome:
+                # O SEGREDO DA NORMALIZAÇÃO (ex: " ovos " vira "Ovos")
+                nome_fmt = n_nome.strip().capitalize()
+                df = st.session_state.despensa
+                
+                # Se já existe, apenas soma a quantidade!
+                if not df.empty and nome_fmt in df['Alimento'].values:
+                    idx = df.index[df['Alimento'] == nome_fmt].tolist()[0]
+                    df.at[idx, 'Quantidade'] = float(df.at[idx, 'Quantidade']) + float(n_qtd)
+                    df.at[idx, 'Unidade'] = n_unidade
+                    df.at[idx, 'Pronto/Rápido'] = n_pronto
+                else:
+                    novo_item = pd.DataFrame({"Alimento": [nome_fmt], "Quantidade": [float(n_qtd)], "Unidade": [n_unidade], "Pronto/Rápido": [n_pronto]})
+                    if df.empty: st.session_state.despensa = novo_item
+                    else: st.session_state.despensa = pd.concat([df, novo_item], ignore_index=True)
+                
+                salvar_despensa(st.session_state.despensa, st.session_state.username) 
+                st.toast(f"✅ {nome_fmt} guardado na despensa!")
+                time.sleep(0.5)
+                st.rerun() # Fecha a janela modal automaticamente
+            else:
+                st.warning("Digite o nome do alimento.")
+
+    @st.dialog("🗑️ Remover Alimento")
+    def modal_remover():
+        if not st.session_state.despensa.empty:
+            lista_alimentos = st.session_state.despensa["Alimento"].tolist()
+            item_remover = st.selectbox("O que acabou?", lista_alimentos)
+            if st.button("Excluir Item", type="primary", use_container_width=True):
+                st.session_state.despensa = st.session_state.despensa[st.session_state.despensa["Alimento"] != item_remover]
+                salvar_despensa(st.session_state.despensa, st.session_state.username)
+                st.toast("🗑️ Item removido do estoque.")
+                time.sleep(0.5)
+                st.rerun() # Fecha a janela modal automaticamente
+        else: 
+            st.write("Seu estoque já está vazio.")
+    # ---------------------------------------------------------
+
     try:
         perfil_seguro = st.session_state.perfil if isinstance(st.session_state.perfil, dict) else {}
         p_idade = safe_int(perfil_seguro.get("idade"), 30)
@@ -449,31 +497,9 @@ else:
             st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>📦 Estoque & Mercado</h3>", unsafe_allow_html=True)
             col_add, col_rem = st.columns(2)
             with col_add:
-                with st.popover("➕ Adicionar", use_container_width=True):
-                    novo_nome = st.text_input("Qual o alimento?")
-                    nova_qtd = st.number_input("Quantidade", min_value=0.0, step=1.0)
-                    nova_unidade = st.selectbox("Unidade de Medida", ["g", "kg", "ml", "L", "un", "dose", "colher"])
-                    novo_pronto = st.radio("Consumo Rápido?", ["Não", "Sim"], horizontal=True)
-                    if st.button("Guardar no Estoque", type="primary", use_container_width=True) and novo_nome:
-                        novo_item = pd.DataFrame({"Alimento": [novo_nome], "Quantidade": [float(nova_qtd)], "Unidade": [nova_unidade], "Pronto/Rápido": [novo_pronto]})
-                        if st.session_state.despensa.empty: st.session_state.despensa = novo_item
-                        else: st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
-                        salvar_despensa(st.session_state.despensa, st.session_state.username) 
-                        st.toast("✅ Item guardado na despensa!")
-                        time.sleep(0.5)
-                        st.rerun()
+                if st.button("➕ Adicionar", use_container_width=True): modal_adicionar()
             with col_rem:
-                with st.popover("🗑️ Remover", use_container_width=True):
-                    if not st.session_state.despensa.empty:
-                        lista_alimentos = st.session_state.despensa["Alimento"].tolist()
-                        item_remover = st.selectbox("O que acabou?", lista_alimentos)
-                        if st.button("Excluir Item", type="primary", use_container_width=True):
-                            st.session_state.despensa = st.session_state.despensa[st.session_state.despensa["Alimento"] != item_remover]
-                            salvar_despensa(st.session_state.despensa, st.session_state.username)
-                            st.toast("🗑️ Item removido.")
-                            time.sleep(0.5)
-                            st.rerun()
-                    else: st.write("Seu estoque está vazio.")
+                if st.button("🗑️ Remover", use_container_width=True): modal_remover()
             
             st.write("")
             with st.container(border=True):
@@ -558,7 +584,7 @@ else:
                                     st.rerun()
                                 except Exception as e: st.error(f"Erro na IA: {e}")
                 else:
-                    st.warning("✨ Falta pouco para a IA assumir o controle!")
+                    st.warning("✨ Falta pouco para a Inteligência Artificial assumir o controle!")
                     
                     if not tem_rotina:
                         with st.container(border=True):
@@ -574,14 +600,22 @@ else:
                     if not tem_estoque:
                         with st.container(border=True):
                             st.markdown("<h4 class='adapt-text'>🛒 2. O que tem na geladeira?</h4>", unsafe_allow_html=True)
-                            st.write("Para montarmos pratos deliciosos e práticos, me conte pelo menos um alimento que você tem disponível hoje:")
+                            st.write("Para montarmos pratos deliciosos e evitar desperdícios, me conte pelo menos um alimento que você tem disponível hoje:")
                             n_nome = st.text_input("Nome do Alimento", key="fast_alimento", placeholder="Ex: Ovos, Aveia, Arroz...")
                             n_qtd = st.number_input("Quantidade", min_value=1.0, step=1.0, key="fast_qtd")
                             if st.button("➕ Salvar na Despensa", type="primary", use_container_width=True):
                                 if n_nome:
-                                    novo_item = pd.DataFrame({"Alimento": [n_nome], "Quantidade": [float(n_qtd)], "Unidade": ["g"], "Pronto/Rápido": ["Não"]})
-                                    if st.session_state.despensa.empty: st.session_state.despensa = novo_item
-                                    else: st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
+                                    # NORMALIZAÇÃO TAMBÉM APLICADA AQUI NO CADASTRO RÁPIDO
+                                    nome_fmt = n_nome.strip().capitalize()
+                                    df = st.session_state.despensa
+                                    
+                                    if not df.empty and nome_fmt in df['Alimento'].values:
+                                        idx = df.index[df['Alimento'] == nome_fmt].tolist()[0]
+                                        df.at[idx, 'Quantidade'] = float(df.at[idx, 'Quantidade']) + float(n_qtd)
+                                    else:
+                                        novo_item = pd.DataFrame({"Alimento": [nome_fmt], "Quantidade": [float(n_qtd)], "Unidade": ["g"], "Pronto/Rápido": ["Não"]})
+                                        if df.empty: st.session_state.despensa = novo_item
+                                        else: st.session_state.despensa = pd.concat([df, novo_item], ignore_index=True)
                                     salvar_despensa(st.session_state.despensa, st.session_state.username) 
                                     st.rerun()
 
