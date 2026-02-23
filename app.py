@@ -1,4 +1,4 @@
-limport streamlit as st
+import streamlit as st
 import pandas as pd
 from datetime import datetime, time, timezone, timedelta
 import google.generativeai as genai
