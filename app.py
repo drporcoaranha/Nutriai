@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 import json
-import time # <-- Nova biblioteca para a pausa tátil
+import time 
 from datetime import datetime, time as dt_time, timezone, timedelta
 import google.generativeai as genai
 import urllib.parse
@@ -188,7 +188,7 @@ if not st.session_state.logged_in and "code" in st.query_params:
         else: st.query_params.clear()
     except Exception as e: pass
 
-# --- 7. UX 8.5: CSS PREMIUM + FEEDBACK TÁTIL ---
+# --- 7. UX 8.6: CSS PREMIUM + FEEDBACK TÁTIL ---
 st.markdown(f"""
     <style>
     :root {{ 
@@ -252,7 +252,7 @@ st.markdown(f"""
     }}
     input {{ color: var(--text-primary) !important; font-size: 16px !important; padding: 12px 14px !important; }}
     
-    /* 🚨 FEEDBACK TÁTIL NOS BOTÕES (:active) 🚨 */
+    /* FEEDBACK TÁTIL NOS BOTÕES */
     div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{
         border-radius: 16px !important; 
         height: 50px !important; 
@@ -265,7 +265,6 @@ st.markdown(f"""
     }}
     div[data-testid="stButton"] button:hover, div[data-testid="stPopover"] > button:hover {{ transform: scale(0.98); opacity: 0.9; }}
     
-    /* O "afundar" do botão quando clicado */
     div[data-testid="stButton"] button:active, div[data-testid="stPopover"] > button:active {{
         transform: scale(0.92) !important; 
         opacity: 0.7 !important;
@@ -303,7 +302,6 @@ st.markdown(f"""
         font-size: 1.2rem !important; margin: 0 !important; padding: 0 !important;
     }}
 
-    /* Botões Customizados Feedback Tátil */
     .btn-google-nativo {{ display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1.5px solid var(--input-border); border-radius: 16px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; box-shadow: 0 2px 8px var(--shadow-color); transition: all 0.15s ease; }}
     .btn-pro {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: #000 !important; border-radius: 16px; height: 55px; font-weight: 800; font-size: 18px; border: none; width: 100%; text-decoration: none; transition: all 0.15s ease; }}
     .btn-whatsapp {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #30D158 0%, #28CD41 100%); color: #FFF !important; border-radius: 16px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; margin-top: 15px; transition: all 0.15s ease; }}
@@ -468,7 +466,7 @@ else:
                     st.session_state.nome_usuario = novo_nome
                     salvar_perfil(st.session_state.username, novo_nome, st.session_state.perfil)
                     st.toast("✅ Perfil atualizado com sucesso!")
-                    time.sleep(0.5) # Pausa tátil
+                    time.sleep(0.5)
                     st.rerun() 
                 st.divider()
                 if st.button("🚪 Sair da Conta", use_container_width=True): fazer_logout()
@@ -565,17 +563,17 @@ else:
                     st.success("🎉 Tudo abastecido! Não falta nada no seu estoque.")
 
         with tab3:
-            st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🍽️ O Seu Dia</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🍽️ Plano Alimentar IA</h3>", unsafe_allow_html=True)
             if st.session_state.cardapio_atual is None:
                 st.markdown("""
                 <div style='text-align: center; padding: 40px 20px;'>
                     <h1 style='font-size: 4rem; margin-bottom: 5px; opacity: 0.8;'>🥗</h1>
-                    <h3 class='adapt-text' style='font-weight: 700; margin-bottom: 5px;'>Seu dia em branco</h3>
+                    <h3 class='adapt-text' style='font-weight: 700; margin-bottom: 5px;'>Seu plano em branco</h3>
                     <p class='sub-text' style='margin-bottom: 25px;'>Aperte o botão para criar um plano sincronizado com o seu estoque e rotina de hoje.</p>
                 </div>
                 """, unsafe_allow_html=True)
                 
-            if st.button("⚡ Gerar Rota de Hoje", use_container_width=True, type="primary"):
+            if st.button("⚡ Gerar Plano Alimentar IA", use_container_width=True, type="primary"):
                 if not api_configurada: st.error("⚠️ Inteligência Artificial offline.")
                 else:
                     with st.spinner("Analisando sua rotina e despensa..."):
@@ -691,7 +689,6 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # BOTÃO SIMULADOR VOLTOU!
                 if st.button("Liberar Acesso PRO (Test Drive)", use_container_width=True):
                     st.session_state.perfil["plano"] = "premium"
                     salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
