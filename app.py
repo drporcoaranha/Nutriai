@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import re            # <--- A FERRAMENTA QUE FALTAVA
+import json          # <--- A FERRAMENTA DE DADOS
 from datetime import datetime, time, timezone, timedelta
 import google.generativeai as genai
 import urllib.parse
@@ -10,6 +12,7 @@ from io import BytesIO
 from PIL import Image
 from supabase import create_client, Client
 import traceback
+
 
 # --- 1. CONFIGURAÇÃO ---
 st.set_page_config(page_title="NutryAi", page_icon="🍏", layout="centered", initial_sidebar_state="collapsed") 
