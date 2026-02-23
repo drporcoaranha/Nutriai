@@ -5,6 +5,7 @@ openpyxl
 requests
 supabase
 httpx==0.27.2
+streamlit-cookies-controller==0.0.2
 
 
 
