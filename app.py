@@ -182,50 +182,79 @@ if not st.session_state.logged_in and "code" in st.query_params:
     except Exception as e:
         pass
 
-# --- 7. CSS GLOBAL UX 4.0 ---
+# --- 7. CSS ADAPTATIVO (MODO DIA / MODO NOITE) ---
 st.markdown(f"""
     <style>
+    /* VARIÁVEIS DO MODO CLARO (PADRÃO) */
+    :root {{
+        --bg-color: #F2F2F7;
+        --card-bg: #FFFFFF;
+        --border-color: #E5E5EA;
+        --input-bg: #FAFAFA;
+        --text-primary: #000000;
+        --shadow-color: rgba(0, 0, 0, 0.04);
+    }}
+
+    /* VARIÁVEIS DO MODO ESCURO (Lê a configuração do celular) */
+    @media (prefers-color-scheme: dark) {{
+        :root {{
+            --bg-color: #0E1117; 
+            --card-bg: #262730;  
+            --border-color: #333333;
+            --input-bg: #1A1C23;
+            --text-primary: #FAFAFA;
+            --shadow-color: rgba(0, 0, 0, 0.3);
+        }}
+    }}
+
     [data-testid="stSidebar"] {{ display: none !important; }}
     [data-testid="collapsedControl"] {{ display: none !important; }}
     #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
     .block-container {{padding-top: 1rem; padding-bottom: 5rem; max-width: 600px;}}
-    .stApp {{ background-color: #F2F2F7 !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Helvetica, Arial, sans-serif !important; }}
+    .stApp {{ background-color: var(--bg-color) !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Helvetica, Arial, sans-serif !important; }}
     
+    /* CARTÕES ADAPTATIVOS */
     div[data-testid="stVerticalBlockBorderWrapper"] > div {{
-        background-color: #FFFFFF !important; border-radius: 14px !important; border: none !important; box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.04) !important; padding: 15px !important;
+        background-color: var(--card-bg) !important; border-radius: 14px !important; border: 1px solid var(--border-color) !important; box-shadow: 0px 2px 10px var(--shadow-color) !important; padding: 15px !important;
     }}
     
+    /* CAMPOS DE INPUT ADAPTATIVOS */
     div[data-testid="stTextInput"] input, div[data-testid="stNumberInput"] input {{
-        border: 1px solid #D1D1D6 !important; border-radius: 10px !important; padding: 12px 14px !important; background-color: #FAFAFA !important; color: #000 !important;
+        border: 1px solid var(--border-color) !important; border-radius: 10px !important; padding: 12px 14px !important; background-color: var(--input-bg) !important; color: var(--text-primary) !important;
     }}
     
+    /* BOTÕES ADAPTATIVOS */
     div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{
-        border-radius: 20px !important; height: 45px !important; font-weight: 600 !important; font-size: 16px !important; border: 1px solid #E5E5EA !important; transition: all 0.2s ease-in-out !important;
+        border-radius: 20px !important; height: 45px !important; font-weight: 600 !important; font-size: 16px !important; border: 1px solid var(--border-color) !important; transition: all 0.2s ease-in-out !important; background-color: var(--card-bg) !important; color: var(--text-primary) !important;
     }}
     div[data-testid="stButton"] button[kind="primary"] {{ background-color: #007AFF !important; color: white !important; border: none !important; }}
     
     .btn-google-nativo {{
-        display: flex; align-items: center; justify-content: center; background-color: #FFFFFF; color: #000000; border: 1px solid #D1D1D6; border-radius: 20px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease-in-out; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 20px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease-in-out; box-shadow: 0 1px 3px var(--shadow-color);
     }}
-    .btn-google-nativo:hover {{ background-color: #F8F8F8; transform: scale(0.98); }}
+    .btn-google-nativo:hover {{ opacity: 0.8; transform: scale(0.98); }}
 
     .btn-whatsapp {{
         display: flex; align-items: center; justify-content: center; background-color: #25D366; color: #FFFFFF !important; border-radius: 20px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; transition: all 0.2s ease-in-out; margin-top: 15px; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.2);
     }}
     .btn-whatsapp:hover {{ background-color: #128C7E; transform: scale(0.98); }}
 
+    /* TABELA ADAPTATIVA */
     table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; }}
-    th {{ color: #8E8E93 !important; font-weight: 600 !important; border-bottom: 1px solid #E5E5EA !important; text-align: left !important; padding-bottom: 8px !important; }}
-    td, th {{ padding: 12px 8px !important; border-bottom: 1px solid #E5E5EA !important; border-top: none !important; border-left: none !important; border-right: none !important; }}
+    th {{ color: #8E8E93 !important; font-weight: 600 !important; border-bottom: 1px solid var(--border-color) !important; text-align: left !important; padding-bottom: 8px !important; }}
+    td, th {{ padding: 12px 8px !important; border-bottom: 1px solid var(--border-color) !important; border-top: none !important; border-left: none !important; border-right: none !important; color: var(--text-primary) !important; }}
     tr:last-child td {{ border-bottom: none !important; }}
     
-    .macro-bar-container {{ width: 100%; background-color: #E5E5EA; border-radius: 8px; height: 10px; margin-top: 4px; overflow: hidden; }}
+    .macro-bar-container {{ width: 100%; background-color: var(--border-color); border-radius: 8px; height: 10px; margin-top: 4px; overflow: hidden; }}
     .macro-bar-fill {{ height: 100%; border-radius: 8px; transition: width 0.5s ease-in-out; }}
     .bg-kcal {{ background-color: #FF9500; }} .bg-prot {{ background-color: #34C759; }} .bg-carb {{ background-color: #007AFF; }} .bg-gord {{ background-color: #AF52DE; }}
 
     .app-tabs > div[data-testid="stTabs"] > div:first-child {{
-        position: -webkit-sticky; position: sticky; top: 0px; z-index: 999; background-color: rgba(242, 242, 247, 0.9); backdrop-filter: blur(10px); padding-top: 10px; padding-bottom: 10px; border-bottom: 1px solid rgba(60, 60, 67, 0.1);
+        position: -webkit-sticky; position: sticky; top: 0px; z-index: 999; background-color: var(--bg-color); backdrop-filter: blur(10px); padding-top: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color);
     }}
+    
+    /* Força os textos marcados com HTML a respeitarem a variável de cor */
+    .adapt-text {{ color: var(--text-primary) !important; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -236,13 +265,13 @@ if not st.session_state.logged_in:
     st.markdown("""
         <div style="text-align: center; margin-bottom: 25px; margin-top: 20px;">
             <h1 style="font-size: 4rem; margin-bottom: 0;">🍏</h1>
-            <h1 style="font-weight: 800; color: #000;">NutryAi</h1>
+            <h1 class="adapt-text" style="font-weight: 800;">NutryAi</h1>
             <p style="color: #8E8E93;">Inteligência em cada refeição.</p>
         </div>
     """, unsafe_allow_html=True)
 
     with st.container(border=True):
-        st.markdown("<h4 style='text-align: center; margin-bottom: 15px;'>Acesse sua conta</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 15px;'>Acesse sua conta</h4>", unsafe_allow_html=True)
         login_user = st.text_input("Usuário", placeholder="ex: seu_nome", key="log_user")
         login_senha = st.text_input("Senha", type="password", placeholder="••••••••", key="log_pass")
         
@@ -307,7 +336,7 @@ else:
     with col_title:
         st.markdown(f"""
             <div style="text-align: center; padding-top: 5px;">
-                <h1 style="color: #000; font-weight: 800; font-size: 2rem; margin-bottom: 0;">NutryAi 🍏</h1>
+                <h1 class="adapt-text" style="font-weight: 800; font-size: 2rem; margin-bottom: 0;">NutryAi 🍏</h1>
                 <p style="color: #8E8E93; font-size: 0.9rem; margin-top: -5px;">{saudacao}, {st.session_state.nome_usuario}! <span style="color:#FF9500; font-weight:bold;">🔥 {streak_atual}</span></p>
             </div>
         """, unsafe_allow_html=True)
@@ -326,7 +355,7 @@ else:
             with tab_dados:
                 st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
                 if foto_salva:
-                    st.markdown(f'<img src="data:image/jpeg;base64,{foto_salva}" width="100" height="100" style="border-radius:50%; object-fit:cover; margin-bottom:10px; border: 2px solid #E5E5EA;">', unsafe_allow_html=True)
+                    st.markdown(f'<img src="data:image/jpeg;base64,{foto_salva}" width="100" height="100" style="border-radius:50%; object-fit:cover; margin-bottom:10px; border: 2px solid var(--border-color);">', unsafe_allow_html=True)
                 else:
                     st.markdown('<div style="font-size: 60px; margin-bottom: 10px;">👤</div>', unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
@@ -449,9 +478,9 @@ else:
     with tab3:
         if st.session_state.cardapio_atual is None:
             st.markdown("""
-            <div style='text-align: center; padding: 30px 20px; background-color: #FFFFFF; border-radius: 14px; box-shadow: 0px 2px 10px rgba(0,0,0,0.04); margin-bottom: 20px; margin-top: 10px;'>
+            <div style='text-align: center; padding: 30px 20px; background-color: var(--card-bg); border-radius: 14px; box-shadow: 0px 2px 10px var(--shadow-color); margin-bottom: 20px; margin-top: 10px; border: 1px solid var(--border-color);'>
                 <h1 style='font-size: 3.5rem; margin-bottom: 5px;'>🍽️</h1>
-                <h3 style='color: #000000; font-weight: 700; margin-bottom: 5px;'>Seu dia em branco</h3>
+                <h3 class='adapt-text' style='font-weight: 700; margin-bottom: 5px;'>Seu dia em branco</h3>
                 <p style='color: #8E8E93; font-size: 0.95rem; margin-bottom: 25px;'>Vamos criar um plano usando seu biotipo e o que tem na geladeira hoje.</p>
             </div>
             """, unsafe_allow_html=True)
@@ -530,14 +559,14 @@ else:
                             st.toast(f"🎉 Rumo à meta! Refeição concluída.")
                             st.rerun()
                 if i < len(refeicoes) - 1:
-                    st.markdown("<div style='width: 3px; height: 25px; background-color: #E5E5EA; margin-left: 30px; margin-top: -15px; margin-bottom: -15px; border-radius: 2px; z-index: 1; position: relative;'></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='width: 3px; height: 25px; background-color: var(--border-color); margin-left: 30px; margin-top: -15px; margin-bottom: -15px; border-radius: 2px; z-index: 1; position: relative;'></div>", unsafe_allow_html=True)
 
     with tab4:
         if st.session_state.cardapio_ideal is None:
             st.markdown("""
-            <div style='text-align: center; padding: 30px 20px; background-color: #FFFFFF; border-radius: 14px; box-shadow: 0px 2px 10px rgba(0,0,0,0.04); margin-bottom: 20px; margin-top: 10px;'>
+            <div style='text-align: center; padding: 30px 20px; background-color: var(--card-bg); border-radius: 14px; box-shadow: 0px 2px 10px var(--shadow-color); margin-bottom: 20px; margin-top: 10px; border: 1px solid var(--border-color);'>
                 <h1 style='font-size: 3.5rem; margin-bottom: 5px;'>👩‍⚕️</h1>
-                <h3 style='color: #000000; font-weight: 700; margin-bottom: 5px;'>Plano Padrão Ouro</h3>
+                <h3 class='adapt-text' style='font-weight: 700; margin-bottom: 5px;'>Plano Padrão Ouro</h3>
                 <p style='color: #8E8E93; font-size: 0.95rem; margin-bottom: 25px;'>A Nutri vai criar seu plano perfeito para você usar no mercado.</p>
             </div>
             """, unsafe_allow_html=True)
