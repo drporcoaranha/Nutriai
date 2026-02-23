@@ -188,7 +188,7 @@ if not st.session_state.logged_in and "code" in st.query_params:
         else: st.query_params.clear()
     except Exception as e: pass
 
-# --- 7. UX 8.6: CSS PREMIUM + FEEDBACK TÁTIL ---
+# --- 7. UX 8.7: CSS PREMIUM ---
 st.markdown(f"""
     <style>
     :root {{ 
@@ -222,94 +222,28 @@ st.markdown(f"""
     [data-testid="collapsedControl"] {{ display: none !important; }}
     #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
     
-    .block-container {{
-        padding-top: 2rem; 
-        padding-bottom: 5rem; 
-        max-width: 600px !important; 
-        margin: 0 auto !important;
-    }}
-    
+    .block-container {{ padding-top: 2rem; padding-bottom: 5rem; max-width: 600px !important; margin: 0 auto !important; }}
     .stApp {{ background-color: var(--bg-color) !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Helvetica, Arial, sans-serif !important; }}
     
-    div[data-testid="stVerticalBlockBorderWrapper"] > div {{
-        background-color: var(--card-bg) !important; 
-        border-radius: 20px !important; 
-        border: 1px solid var(--border-color) !important; 
-        box-shadow: 0px 8px 24px var(--shadow-color) !important; 
-        padding: 20px !important;
-    }}
-    
-    div[data-baseweb="input"] > div, 
-    div[data-baseweb="select"] > div {{
-        border: 1.5px solid var(--input-border) !important;
-        background-color: var(--input-bg) !important;
-        border-radius: 12px !important;
-    }}
-    div[data-baseweb="input"] > div:focus-within, 
-    div[data-baseweb="select"] > div:focus-within {{
-        border-color: var(--accent-color) !important;
-        box-shadow: 0 0 0 2px rgba(52,199,89,0.2) !important;
-    }}
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {{ background-color: var(--card-bg) !important; border-radius: 20px !important; border: 1px solid var(--border-color) !important; box-shadow: 0px 8px 24px var(--shadow-color) !important; padding: 20px !important; }}
+    div[data-baseweb="input"] > div, div[data-baseweb="select"] > div {{ border: 1.5px solid var(--input-border) !important; background-color: var(--input-bg) !important; border-radius: 12px !important; }}
+    div[data-baseweb="input"] > div:focus-within, div[data-baseweb="select"] > div:focus-within {{ border-color: var(--accent-color) !important; box-shadow: 0 0 0 2px rgba(52,199,89,0.2) !important; }}
     input {{ color: var(--text-primary) !important; font-size: 16px !important; padding: 12px 14px !important; }}
     
-    /* FEEDBACK TÁTIL NOS BOTÕES */
-    div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{
-        border-radius: 16px !important; 
-        height: 50px !important; 
-        font-weight: 700 !important; 
-        font-size: 16px !important; 
-        border: 1px solid var(--input-border) !important;
-        background-color: var(--card-bg) !important; 
-        color: var(--text-primary) !important;
-        transition: all 0.15s ease-in-out !important;
-    }}
+    div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{ border-radius: 16px !important; height: 50px !important; font-weight: 700 !important; font-size: 16px !important; border: 1px solid var(--input-border) !important; background-color: var(--card-bg) !important; color: var(--text-primary) !important; transition: all 0.15s ease-in-out !important; }}
     div[data-testid="stButton"] button:hover, div[data-testid="stPopover"] > button:hover {{ transform: scale(0.98); opacity: 0.9; }}
+    div[data-testid="stButton"] button:active, div[data-testid="stPopover"] > button:active {{ transform: scale(0.92) !important; opacity: 0.7 !important; }}
+    div[data-testid="stButton"] button[kind="primary"] {{ background: var(--accent-gradient) !important; color: white !important; border: none !important; }}
     
-    div[data-testid="stButton"] button:active, div[data-testid="stPopover"] > button:active {{
-        transform: scale(0.92) !important; 
-        opacity: 0.7 !important;
-    }}
-    
-    div[data-testid="stButton"] button[kind="primary"] {{ 
-        background: var(--accent-gradient) !important; 
-        color: white !important; 
-        border: none !important; 
-    }}
-    
-    div[data-testid="stTabs"] > div:first-child {{
-        background-color: var(--bg-color); 
-        padding-top: 10px; 
-        padding-bottom: 10px; 
-        position: -webkit-sticky;
-        position: sticky; 
-        top: 0px; 
-        z-index: 999;
-        border-bottom: 1px solid var(--border-color);
-    }}
-    div[data-testid="stTabs"] button[data-baseweb="tab"] {{
-        background-color: transparent !important;
-        border-radius: 20px !important;
-        padding: 8px 16px !important;
-        border: none !important;
-        color: var(--text-secondary) !important;
-    }}
-    div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {{
-        background-color: var(--card-bg) !important;
-        color: var(--text-primary) !important;
-        box-shadow: 0 2px 8px var(--shadow-color) !important;
-    }}
-    div[data-testid="stTabs"] button[data-baseweb="tab"] > div[data-testid="stMarkdownContainer"] > p {{
-        font-size: 1.2rem !important; margin: 0 !important; padding: 0 !important;
-    }}
+    div[data-testid="stTabs"] > div:first-child {{ background-color: var(--bg-color); padding-top: 10px; padding-bottom: 10px; position: -webkit-sticky; position: sticky; top: 0px; z-index: 999; border-bottom: 1px solid var(--border-color); }}
+    div[data-testid="stTabs"] button[data-baseweb="tab"] {{ background-color: transparent !important; border-radius: 20px !important; padding: 8px 16px !important; border: none !important; color: var(--text-secondary) !important; }}
+    div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {{ background-color: var(--card-bg) !important; color: var(--text-primary) !important; box-shadow: 0 2px 8px var(--shadow-color) !important; }}
+    div[data-testid="stTabs"] button[data-baseweb="tab"] > div[data-testid="stMarkdownContainer"] > p {{ font-size: 1.2rem !important; margin: 0 !important; padding: 0 !important; }}
 
     .btn-google-nativo {{ display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1.5px solid var(--input-border); border-radius: 16px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; box-shadow: 0 2px 8px var(--shadow-color); transition: all 0.15s ease; }}
     .btn-pro {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: #000 !important; border-radius: 16px; height: 55px; font-weight: 800; font-size: 18px; border: none; width: 100%; text-decoration: none; transition: all 0.15s ease; }}
     .btn-whatsapp {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #30D158 0%, #28CD41 100%); color: #FFF !important; border-radius: 16px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; margin-top: 15px; transition: all 0.15s ease; }}
-    
-    .btn-google-nativo:active, .btn-pro:active, .btn-whatsapp:active {{
-        transform: scale(0.92) !important;
-        opacity: 0.7 !important;
-    }}
+    .btn-google-nativo:active, .btn-pro:active, .btn-whatsapp:active {{ transform: scale(0.92) !important; opacity: 0.7 !important; }}
 
     table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; background-color: transparent; }}
     th {{ color: var(--text-secondary) !important; font-weight: 600 !important; border-bottom: 1px solid var(--border-color) !important; text-align: left !important; padding-bottom: 10px !important; }}
@@ -318,15 +252,9 @@ st.markdown(f"""
     
     .macro-bar-container {{ width: 100%; background-color: var(--border-color); border-radius: 10px; height: 8px; margin-top: 6px; overflow: hidden; }}
     .macro-bar-fill {{ height: 100%; border-radius: 10px; transition: width 0.8s ease; }}
-    .bg-kcal {{ background: linear-gradient(90deg, #FF9500, #FFCC00); }} 
-    .bg-prot {{ background: linear-gradient(90deg, #34C759, #32D74B); }} 
-    .bg-carb {{ background: linear-gradient(90deg, #007AFF, #5AC8FA); }} 
-    .bg-gord {{ background: linear-gradient(90deg, #AF52DE, #FF2D55); }}
+    .bg-kcal {{ background: linear-gradient(90deg, #FF9500, #FFCC00); }} .bg-prot {{ background: linear-gradient(90deg, #34C759, #32D74B); }} .bg-carb {{ background: linear-gradient(90deg, #007AFF, #5AC8FA); }} .bg-gord {{ background: linear-gradient(90deg, #AF52DE, #FF2D55); }}
     
-    [data-testid="stArrowVegaLiteChart"] {{
-        pointer-events: none !important; 
-        touch-action: none !important;
-    }}
+    [data-testid="stArrowVegaLiteChart"] {{ pointer-events: none !important; touch-action: none !important; }}
 
     .adapt-text {{ color: var(--text-primary) !important; }}
     .sub-text {{ color: var(--text-secondary) !important; font-size: 0.95rem; }}
@@ -574,27 +502,33 @@ else:
                 """, unsafe_allow_html=True)
                 
             if st.button("⚡ Gerar Plano Alimentar IA", use_container_width=True, type="primary"):
-                if not api_configurada: st.error("⚠️ Inteligência Artificial offline.")
+                if not api_configurada: 
+                    st.error("⚠️ Inteligência Artificial offline.")
                 else:
-                    with st.spinner("Analisando sua rotina e despensa..."):
-                        df_temp = st.session_state.despensa.copy()
-                        if not df_temp.empty:
-                            df_temp['Quantidade_Num'] = pd.to_numeric(df_temp['Quantidade'], errors='coerce').fillna(0)
-                            despensa_ativa = df_temp[df_temp["Quantidade_Num"] > 0]
-                        else: despensa_ativa = pd.DataFrame()
+                    # 🚨 TRAVA DE SEGURANÇA: Verifica se a despensa tem comida 🚨
+                    df_temp = st.session_state.despensa.copy()
+                    if not df_temp.empty:
+                        df_temp['Quantidade_Num'] = pd.to_numeric(df_temp['Quantidade'], errors='coerce').fillna(0)
+                        despensa_ativa = df_temp[df_temp["Quantidade_Num"] > 0]
+                    else: 
+                        despensa_ativa = pd.DataFrame()
                         
-                        prompt = f"""
-                        Nutricionista Clínico. Crie o cardápio real de hoje usando APENAS O ESTOQUE.
-                        BIOMETRIA: {dados_perfil_ia}
-                        AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')}-{trab_fim.strftime('%H:%M')} | Transito {transito_inicio.strftime('%H:%M')}-{transito_fim.strftime('%H:%M')} | Treino {treino_inicio.strftime('%H:%M')}-{treino_fim.strftime('%H:%M')} | Estudo {estudo_inicio.strftime('%H:%M')}-{estudo_fim.strftime('%H:%M')} | Dorme {hora_dormir.strftime('%H:%M')} | Prep. Máx: {tempo_preparo} min.
-                        ESTOQUE: {despensa_ativa.to_dict(orient="records")}
-                        Retorne JSON exato: {{"resumo_diario": {{"calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "ingredientes": "Qtd", "instrucao_preparo": "Instrução", "macros": {{"calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g"}}, "uso_despensa": [{{"nome_exato": "NOME", "qtd_descontada": 150}}]}}]}}
-                        """
-                        try:
-                            resp = modelo.generate_content(prompt).text.strip()
-                            st.session_state.cardapio_atual = json.loads(re.search(r'\{.*\}', resp, re.DOTALL).group(0))
-                            st.rerun()
-                        except Exception as e: st.error(f"Erro na IA: {e}")
+                    if despensa_ativa.empty:
+                        st.warning("⚠️ O seu estoque está vazio! Vá até a aba 📦 Estoque e adicione alguns alimentos antes de gerar o plano, senão a IA não terá com o que cozinhar.")
+                    else:
+                        with st.spinner("Analisando sua rotina e despensa..."):
+                            prompt = f"""
+                            Nutricionista Clínico. Crie o cardápio real de hoje usando APENAS O ESTOQUE.
+                            BIOMETRIA: {dados_perfil_ia}
+                            AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')}-{trab_fim.strftime('%H:%M')} | Transito {transito_inicio.strftime('%H:%M')}-{transito_fim.strftime('%H:%M')} | Treino {treino_inicio.strftime('%H:%M')}-{treino_fim.strftime('%H:%M')} | Estudo {estudo_inicio.strftime('%H:%M')}-{estudo_fim.strftime('%H:%M')} | Dorme {hora_dormir.strftime('%H:%M')} | Prep. Máx: {tempo_preparo} min.
+                            ESTOQUE: {despensa_ativa.to_dict(orient="records")}
+                            Retorne JSON exato: {{"resumo_diario": {{"calorias_totais": 0, "proteinas_totais": "0g", "carbos_totais": "0g", "gorduras_totais": "0g"}}, "refeicoes": [{{"hora": "HH:MM", "nome": "Nome", "ingredientes": "Qtd", "instrucao_preparo": "Instrução", "macros": {{"calorias": 0, "proteinas": "0g", "carbos": "0g", "gorduras": "0g"}}, "uso_despensa": [{{"nome_exato": "NOME", "qtd_descontada": 150}}]}}]}}
+                            """
+                            try:
+                                resp = modelo.generate_content(prompt).text.strip()
+                                st.session_state.cardapio_atual = json.loads(re.search(r'\{.*\}', resp, re.DOTALL).group(0))
+                                st.rerun()
+                            except Exception as e: st.error(f"Erro na IA: {e}")
 
             if st.session_state.cardapio_atual is not None:
                 resumo = st.session_state.cardapio_atual.get("resumo_diario", {})
