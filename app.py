@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import re
 import json
-from datetime import datetime, time, timezone, timedelta
+import time # <-- Nova biblioteca para a pausa tátil
+from datetime import datetime, time as dt_time, timezone, timedelta
 import google.generativeai as genai
 import urllib.parse
 import requests
@@ -187,7 +188,7 @@ if not st.session_state.logged_in and "code" in st.query_params:
         else: st.query_params.clear()
     except Exception as e: pass
 
-# --- 7. UX 8.3: CSS PREMIUM + GRÁFICO FLUÍDO ---
+# --- 7. UX 8.5: CSS PREMIUM + FEEDBACK TÁTIL ---
 st.markdown(f"""
     <style>
     :root {{ 
@@ -251,6 +252,7 @@ st.markdown(f"""
     }}
     input {{ color: var(--text-primary) !important; font-size: 16px !important; padding: 12px 14px !important; }}
     
+    /* 🚨 FEEDBACK TÁTIL NOS BOTÕES (:active) 🚨 */
     div[data-testid="stButton"] button, div[data-testid="stPopover"] > button {{
         border-radius: 16px !important; 
         height: 50px !important; 
@@ -259,7 +261,16 @@ st.markdown(f"""
         border: 1px solid var(--input-border) !important;
         background-color: var(--card-bg) !important; 
         color: var(--text-primary) !important;
+        transition: all 0.15s ease-in-out !important;
     }}
+    div[data-testid="stButton"] button:hover, div[data-testid="stPopover"] > button:hover {{ transform: scale(0.98); opacity: 0.9; }}
+    
+    /* O "afundar" do botão quando clicado */
+    div[data-testid="stButton"] button:active, div[data-testid="stPopover"] > button:active {{
+        transform: scale(0.92) !important; 
+        opacity: 0.7 !important;
+    }}
+    
     div[data-testid="stButton"] button[kind="primary"] {{ 
         background: var(--accent-gradient) !important; 
         color: white !important; 
@@ -292,9 +303,15 @@ st.markdown(f"""
         font-size: 1.2rem !important; margin: 0 !important; padding: 0 !important;
     }}
 
-    .btn-google-nativo {{ display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1.5px solid var(--input-border); border-radius: 16px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; box-shadow: 0 2px 8px var(--shadow-color); }}
-    .btn-pro {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: #000 !important; border-radius: 16px; height: 55px; font-weight: 800; font-size: 18px; border: none; width: 100%; text-decoration: none; }}
-    .btn-whatsapp {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #30D158 0%, #28CD41 100%); color: #FFF !important; border-radius: 16px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; margin-top: 15px; }}
+    /* Botões Customizados Feedback Tátil */
+    .btn-google-nativo {{ display: flex; align-items: center; justify-content: center; background-color: var(--card-bg); color: var(--text-primary); border: 1.5px solid var(--input-border); border-radius: 16px; height: 50px; font-weight: 600; font-size: 16px; text-decoration: none; width: 100%; box-shadow: 0 2px 8px var(--shadow-color); transition: all 0.15s ease; }}
+    .btn-pro {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: #000 !important; border-radius: 16px; height: 55px; font-weight: 800; font-size: 18px; border: none; width: 100%; text-decoration: none; transition: all 0.15s ease; }}
+    .btn-whatsapp {{ display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #30D158 0%, #28CD41 100%); color: #FFF !important; border-radius: 16px; height: 50px; font-weight: 700; font-size: 16px; text-decoration: none; width: 100%; margin-top: 15px; transition: all 0.15s ease; }}
+    
+    .btn-google-nativo:active, .btn-pro:active, .btn-whatsapp:active {{
+        transform: scale(0.92) !important;
+        opacity: 0.7 !important;
+    }}
 
     table {{ width: 100%; border-collapse: collapse; font-size: 0.95rem; background-color: transparent; }}
     th {{ color: var(--text-secondary) !important; font-weight: 600 !important; border-bottom: 1px solid var(--border-color) !important; text-align: left !important; padding-bottom: 10px !important; }}
@@ -308,7 +325,6 @@ st.markdown(f"""
     .bg-carb {{ background: linear-gradient(90deg, #007AFF, #5AC8FA); }} 
     .bg-gord {{ background: linear-gradient(90deg, #AF52DE, #FF2D55); }}
     
-    /* GRÁFICO SEM SEQUESTRO DE TELA */
     [data-testid="stArrowVegaLiteChart"] {{
         pointer-events: none !important; 
         touch-action: none !important;
@@ -451,6 +467,8 @@ else:
                     st.session_state.perfil.update({"idade": nova_idade, "peso": novo_peso, "altura": novo_altura, "objetivo": novo_obj, "atividade": nova_atv, "foto": foto_salva})
                     st.session_state.nome_usuario = novo_nome
                     salvar_perfil(st.session_state.username, novo_nome, st.session_state.perfil)
+                    st.toast("✅ Perfil atualizado com sucesso!")
+                    time.sleep(0.5) # Pausa tátil
                     st.rerun() 
                 st.divider()
                 if st.button("🚪 Sair da Conta", use_container_width=True): fazer_logout()
@@ -463,26 +481,28 @@ else:
             st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🕒 Sua Rotina Diária</h3>", unsafe_allow_html=True)
             with st.container(border=True):
                 c1, c2 = st.columns(2)
-                hora_acordar = c1.time_input("☀️ Acordar", time(6, 30))
-                hora_dormir = c2.time_input("🌙 Dormir", time(23, 0))
+                hora_acordar = c1.time_input("☀️ Acordar", dt_time(6, 30))
+                hora_dormir = c2.time_input("🌙 Dormir", dt_time(23, 0))
                 c3, c4 = st.columns(2)
-                trab_inicio = c3.time_input("💼 Trab. Início", time(8, 0))
-                trab_fim = c4.time_input("💼 Trab. Fim", time(17, 30))
+                trab_inicio = c3.time_input("💼 Trab. Início", dt_time(8, 0))
+                trab_fim = c4.time_input("💼 Trab. Fim", dt_time(17, 30))
                 c5, c6 = st.columns(2)
-                transito_inicio = c5.time_input("🚗 Trâns. Início", time(17, 30))
-                transito_fim = c6.time_input("🏁 Trâns. Fim", time(18, 30))
+                transito_inicio = c5.time_input("🚗 Trâns. Início", dt_time(17, 30))
+                transito_fim = c6.time_input("🏁 Trâns. Fim", dt_time(18, 30))
                 c7, c8 = st.columns(2)
-                treino_inicio = c7.time_input("💪 Treino Início", time(19, 0))
-                treino_fim = c8.time_input("🚿 Treino Fim", time(20, 0))
+                treino_inicio = c7.time_input("💪 Treino Início", dt_time(19, 0))
+                treino_fim = c8.time_input("🚿 Treino Fim", dt_time(20, 0))
                 c9, c10 = st.columns(2)
-                estudo_inicio = c9.time_input("📚 Estudo Início", time(20, 30))
-                estudo_fim = c10.time_input("📝 Estudo Fim", time(22, 0))
+                estudo_inicio = c9.time_input("📚 Estudo Início", dt_time(20, 30))
+                estudo_fim = c10.time_input("📝 Estudo Fim", dt_time(22, 0))
                 st.divider()
                 tempo_preparo = st.slider("⏱️ Tempo livre para cozinhar (min/dia)", 0, 120, 30)
                 if st.button("Salvar Rotina", use_container_width=True, type="primary"):
                     st.session_state.cardapio_atual = None
                     st.session_state.consumidos = set()
-                    st.success("✅ Ajustes salvos na Inteligência Artificial.")
+                    st.toast("✅ Horários salvos no motor da IA!")
+                    time.sleep(0.5)
+                    st.rerun()
 
         with tab2:
             st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>📦 Estoque & Mercado</h3>", unsafe_allow_html=True)
@@ -498,6 +518,8 @@ else:
                         if st.session_state.despensa.empty: st.session_state.despensa = novo_item
                         else: st.session_state.despensa = pd.concat([st.session_state.despensa, novo_item], ignore_index=True)
                         salvar_despensa(st.session_state.despensa, st.session_state.username) 
+                        st.toast("✅ Item guardado na despensa!")
+                        time.sleep(0.5)
                         st.rerun()
             with col_rem:
                 with st.popover("🗑️ Remover", use_container_width=True):
@@ -507,6 +529,8 @@ else:
                         if st.button("Excluir Item", type="primary", use_container_width=True):
                             st.session_state.despensa = st.session_state.despensa[st.session_state.despensa["Alimento"] != item_remover]
                             salvar_despensa(st.session_state.despensa, st.session_state.username)
+                            st.toast("🗑️ Item removido.")
+                            time.sleep(0.5)
                             st.rerun()
                     else: st.write("Seu estoque está vazio.")
             
@@ -653,6 +677,7 @@ else:
                     st.session_state.perfil["peso"] = float(novo_registro)
                     salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                     st.toast("✅ Peso registrado com sucesso!")
+                    time.sleep(0.5)
                     st.rerun()
 
         with tab5:
