@@ -101,6 +101,7 @@ def salvar_perfil(username, nome_atualizado, perfil_data):
     except Exception as e: pass
 
 def carregar_despensa(username):
+    # 🚨 BUG DOS FANTASMAS RESOLVIDO: Retorna vazio se não houver nada!
     try:
         res = supabase.table('despensa').select('*').eq('username', username).execute()
         if len(res.data) > 0:
@@ -112,7 +113,7 @@ def carregar_despensa(username):
                 if col not in df.columns: df[col] = "" if col != 'Quantidade' else 0.0
             return df[colunas_necessarias]
     except Exception as e: pass
-    return pd.DataFrame({"Alimento": ["Ovos", "Aveia", "Frango"], "Quantidade": [12.0, 500.0, 1000.0], "Unidade": ["un", "g", "g"], "Pronto/Rápido": ["Sim", "Sim", "Não"]})
+    return pd.DataFrame(columns=['Alimento', 'Quantidade', 'Unidade', 'Pronto/Rápido']) # Matando os fantasmas aqui
 
 def salvar_despensa(df, username):
     try:
@@ -187,7 +188,10 @@ def fazer_logout():
     st.session_state.intencao_logout = True 
     if cookies_enabled: 
         cookie_controller.set("nutriai_auth_user", "", max_age=0) 
-        time.sleep(0.2)
+    
+    # 🚨 BUG DO LOGOUT BRUTO RESOLVIDO 🚨
+    st.toast("👋 Desconectando... Até a próxima!")
+    time.sleep(1) # Aguarda 1 segundo para o usuário ler a mensagem
         
     st.session_state.logged_in = False
     st.session_state.username = None
@@ -678,7 +682,11 @@ else:
                             st.markdown(f"<span style='font-weight: 700; font-size: 1.1rem; color: var(--text-primary);'>{cor_bolinha} {ref.get('hora','')} • {ref.get('nome','')}</span>", unsafe_allow_html=True)
                             st.markdown(f"<p style='color: var(--text-primary); margin: 5px 0 0 0;'>🍽️ {ref.get('ingredientes','')}</p>", unsafe_allow_html=True)
                         with c_chk:
-                            if st.checkbox("Baixa", key=f"c_{i}", value=ja_cons, disabled=ja_cons, label_visibility="collapsed"):
+                            # 🚨 BUG DO TRAVAMENTO RESOLVIDO: Chave dinâmica e segura
+                            nome_limpo = re.sub(r'[^a-zA-Z0-9]', '', ref.get('nome',''))
+                            chave_segura = f"chk_{hoje_str}_{i}_{nome_limpo}"
+                            
+                            if st.checkbox("Baixa", key=chave_segura, value=ja_cons, disabled=ja_cons, label_visibility="collapsed"):
                                 st.session_state.consumidos.add(id_ref)
                                 st.session_state.perfil["cardapio_salvo"]["consumidos"] = list(st.session_state.consumidos)
                                 salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
@@ -694,10 +702,13 @@ else:
                                 st.rerun()
                                 
                 if st.button("🗑️ Descartar Plano e Criar Outro", use_container_width=True):
+                    # 🚨 GARANTIA DE LIMPEZA ABSOLUTA
                     st.session_state.cardapio_atual = None
                     st.session_state.consumidos = set()
                     st.session_state.perfil["cardapio_salvo"] = {}
                     salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                    st.toast("🗑️ Plano descartado com sucesso!")
+                    time.sleep(0.5)
                     st.rerun()
 
         with tab4:
@@ -816,5 +827,6 @@ else:
                                 except Exception as e: st.error(f"Erro na resposta: {e}")
 
     except Exception as general_error:
-        st.error("🚨 Inconsistência na interface detectada.")
+        # Se um erro crítico acontecer, agora ele vai te contar qual foi ao invés de só sumir
+        st.error(f"🚨 Inconsistência na interface detectada: {general_error}")
         st.code(traceback.format_exc())
