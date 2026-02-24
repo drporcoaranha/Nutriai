@@ -38,7 +38,7 @@ except KeyError:
     st.stop()
 
 MERCADOPAGO_ACCESS_TOKEN = st.secrets.get("MERCADOPAGO_ACCESS_TOKEN", "")
-ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", "admin@nutryai.com").lower() # <--- EMAIL DO DONO AQUI
+ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", "admin@nutryai.com").lower() 
 
 @st.cache_resource
 def init_connection():
@@ -326,7 +326,7 @@ elif not st.session_state.logged_in and "code" in st.query_params:
         st.query_params.clear()
         st.rerun()
 
-# --- 8. UX CSS PREMIUM ---
+# --- 8. UX CSS PREMIUM E INJEÇÃO DO ÍCONE APPLE ---
 st.markdown(f"""
     <link rel="apple-touch-icon" href="https://emojicdn.elk.sh/1f34f">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -401,8 +401,7 @@ if not st.session_state.logged_in:
                     st.warning("Por favor, insira um e-mail válido.")
             else:
                 st.warning("Preencha todos os campos.")
-                
-    # 🚨 NOVO: MODAL DE ESQUECI A SENHA CONCIERGE 🚨
+
     @st.dialog("🔒 Recuperação de Senha")
     def modal_esqueci_senha():
         st.write("Para redefinir sua senha de forma segura e imediata, entre em contato com nosso suporte via WhatsApp.")
@@ -447,7 +446,6 @@ if not st.session_state.logged_in:
                             st.error("E-mail ou senha incorretos.")
                 else: st.warning("Preencha todos os campos.")
                 
-            # NOVO BOTÃO DE ESQUECI A SENHA
             if st.button("Esqueci minha senha", use_container_width=True):
                 modal_esqueci_senha()
                     
@@ -470,8 +468,6 @@ else:
     hoje_str = hoje.strftime("%Y-%m-%d")
     
     eh_pro = str(perfil_seguro.get("plano", "gratis")) == "premium"
-    
-    # 🚨 VERIFICA SE O USUÁRIO ATUAL É O DONO DO APP 🚨
     eh_admin = (st.session_state.username == ADMIN_EMAIL)
     
     if eh_pro:
@@ -543,6 +539,22 @@ else:
                 nova_foto = st.file_uploader("Mudar foto", type=["jpg", "png"], label_visibility="collapsed")
                 novo_nome = st.text_input("Seu Nome", value=st.session_state.nome_usuario)
                 nova_idade = st.number_input("Idade", value=m_idade)
+                
+                # 🚨 NOVO: ZONA DE PERIGO (EXCLUIR CONTA) 🚨
+                st.markdown("<h4 class='adapt-text' style='color: #FF3B30; font-size: 0.9rem; margin-top: 20px; margin-bottom: 5px;'>🚨 Zona de Perigo</h4>", unsafe_allow_html=True)
+                with st.expander("Excluir minha conta permanentemente"):
+                    st.warning("Esta ação apagará todos os seus dados, histórico e despensa. Não pode ser desfeita.")
+                    check_del = st.checkbox("Sim, quero apagar tudo.", key="chk_del_conta")
+                    if st.button("🗑️ Confirmar Exclusão", disabled=not check_del, use_container_width=True):
+                        with st.spinner("Apagando dados..."):
+                            try:
+                                supabase.table('despensa').delete().eq('username', st.session_state.username).execute()
+                                supabase.table('users').delete().eq('username', st.session_state.username).execute()
+                                st.success("Adeus! Conta apagada com sucesso.")
+                                time.sleep(1.5)
+                                fazer_logout()
+                            except Exception as e:
+                                st.error("Erro ao apagar. Contate o suporte.")
 
             with tab_bio:
                 novo_peso = st.number_input("Peso (kg)", value=m_peso, step=0.5)
@@ -745,7 +757,6 @@ else:
             if st.button("⚙️ Ajustes", use_container_width=True):
                 modal_ajustes()
 
-        # 🚨 ABAS DINÂMICAS: INCLUI ABA ADMIN SE FOR O DONO 🚨
         titulos_abas = ["🏠", "🕒", "📦", "🍽️", "💧", "📈", "👑", "💬"]
         if eh_admin: titulos_abas.append("📊 Admin")
         
