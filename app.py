@@ -58,7 +58,6 @@ def gerar_checkout_mercadopago(email_usuario):
         "Authorization": f"Bearer {MERCADOPAGO_ACCESS_TOKEN}",
         "Content-Type": "application/json"
     }
-    # Payload para criação de um Checkout Pro Dinâmico
     payload = {
         "items": [
             {
@@ -73,18 +72,18 @@ def gerar_checkout_mercadopago(email_usuario):
             "email": email_usuario
         },
         "back_urls": {
-            "success": REDIRECT_URI, # Volta pro app se pagar
+            "success": REDIRECT_URI, 
             "failure": REDIRECT_URI,
             "pending": REDIRECT_URI
         },
         "auto_return": "approved",
-        "external_reference": email_usuario # Identificador para o seu banco de dados no futuro
+        "external_reference": email_usuario 
     }
     
     try:
         res = requests.post(url, json=payload, headers=headers)
         if res.status_code in [200, 201]:
-            return res.json().get("init_point") # URL do Checkout Oficial
+            return res.json().get("init_point") 
     except Exception as e: pass
     return None
 
@@ -224,8 +223,60 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- INTERCEPTADOR DO GOOGLE SEGURO ---
-if not st.session_state.logged_in and "code" in st.query_params:
+# --- 7. INTERCEPTADORES E WEBHOOKS (RODAM ANTES DA TELA) ---
+
+# 7.1. Interceptador do Mercado Pago (Seguro)
+if "status" in st.query_params and "external_reference" in st.query_params:
+    status_pagamento = st.query_params.get("status")
+    email_pagador = st.query_params.get("external_reference")
+    payment_id = st.query_params.get("payment_id")
+    
+    st.query_params.clear() # Limpa a URL imediatamente para não rodar duas vezes
+    
+    if status_pagamento == "approved" and email_pagador:
+        ph = st.empty()
+        ph.info("🔄 Validando seu pagamento com o Mercado Pago...")
+        pagamento_valido = False
+        
+        # Dupla checagem: Pergunta pro Mercado Pago se o ID é real
+        if payment_id and MERCADOPAGO_ACCESS_TOKEN:
+            try:
+                ver_res = requests.get(f"https://api.mercadopago.com/v1/payments/{payment_id}", headers={"Authorization": f"Bearer {MERCADOPAGO_ACCESS_TOKEN}"})
+                if ver_res.status_code == 200 and ver_res.json().get("status") == "approved":
+                    pagamento_valido = True
+            except: pass
+        else:
+            # Fallback (caso esteja testando sem chave oficial ainda)
+            pagamento_valido = True 
+
+        if pagamento_valido:
+            try:
+                res_db = supabase.table('users').select('*').eq('username', email_pagador.lower()).execute()
+                if len(res_db.data) > 0:
+                    perfil_atual = res_db.data[0].get("perfil", {})
+                    perfil_atual["plano"] = "premium"
+                    perfil_atual["data_assinatura"] = datetime.now(fuso_local).strftime("%Y-%m-%d")
+                    
+                    # Salva no banco de dados
+                    supabase.table('users').update({"perfil": perfil_atual}).eq('username', email_pagador.lower()).execute()
+                    
+                    # Atualiza a sessão atual se o usuário já estiver logado
+                    if st.session_state.username == email_pagador.lower():
+                        st.session_state.perfil["plano"] = "premium"
+                        st.session_state.perfil["data_assinatura"] = perfil_atual["data_assinatura"]
+                        
+                    ph.empty()
+                    st.balloons()
+                    st.success("🎉 Pagamento Aprovado! Bem-vindo ao NutryAi PRO.")
+                    time.sleep(3)
+                    st.rerun()
+            except Exception as e: 
+                ph.error("Erro ao sincronizar pagamento. Contate o suporte.")
+                time.sleep(3)
+                st.rerun()
+
+# 7.2. Interceptador do Google Login
+elif not st.session_state.logged_in and "code" in st.query_params:
     st.info("🔄 Conectando com o Google...")
     codigo_autorizacao = st.query_params["code"]
     st.query_params.clear() 
@@ -253,7 +304,7 @@ if not st.session_state.logged_in and "code" in st.query_params:
                 st.rerun() 
     except Exception as e: st.error("Falha ao conectar com o Google.")
 
-# --- 7. UX CSS PREMIUM E INJEÇÃO DO ÍCONE APPLE ---
+# --- 8. UX CSS PREMIUM E INJEÇÃO DO ÍCONE APPLE ---
 st.markdown(f"""
     <link rel="apple-touch-icon" href="https://emojicdn.elk.sh/1f34f">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -323,58 +374,57 @@ if not st.session_state.logged_in:
                         st.session_state.cadastro_sucesso = True
                         st.rerun()
                     else:
-                        st.error("⚠️ Este e-mail já está em uso por uma conta. Faça o login.")
+                        st.error("⚠️ Este e-mail já está em uso. Faça o login.")
                 else:
                     st.warning("Por favor, insira um e-mail válido.")
             else:
                 st.warning("Preencha todos os campos.")
 
-    if "code" not in st.query_params:
-        with st.container():
-            st.markdown("""
-                <div class="brand-container">
-                    <div class="brand-icon-box"><span class="brand-icon">🍏</span></div>
-                    <h1 class="brand-text">NutryAi</h1>
-                    <p class="sub-text" style="margin-top: 8px;">Sua inteligência nutricional.</p>
-                </div>
-            """, unsafe_allow_html=True)
+    with st.container():
+        st.markdown("""
+            <div class="brand-container">
+                <div class="brand-icon-box"><span class="brand-icon">🍏</span></div>
+                <h1 class="brand-text">NutryAi</h1>
+                <p class="sub-text" style="margin-top: 8px;">Sua inteligência nutricional.</p>
+            </div>
+        """, unsafe_allow_html=True)
 
-            if st.session_state.cadastro_sucesso:
-                st.success("✅ Conta criada com sucesso! Faça login abaixo para iniciar.")
-                st.session_state.cadastro_sucesso = False
+        if st.session_state.cadastro_sucesso:
+            st.success("✅ Conta criada com sucesso! Faça login abaixo para iniciar.")
+            st.session_state.cadastro_sucesso = False
 
-            with st.container(border=True):
-                st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse sua conta</h4>", unsafe_allow_html=True)
-                login_user = st.text_input("E-mail", placeholder="ex: seu@email.com", label_visibility="collapsed").lower()
-                login_senha = st.text_input("Senha", type="password", placeholder="Sua senha secreta", label_visibility="collapsed")
-                
-                st.write("")
-                if st.button("Entrar no App", use_container_width=True, type="primary"):
-                    if login_user and login_senha:
-                        with st.spinner("🔄 Conectando aos servidores seguros..."):
-                            dados_usuario = validar_login(login_user, login_senha)
-                            
-                            if dados_usuario == "google_only":
-                                st.warning("🔗 Conta Google detectada! Faça login com o botão abaixo ou crie uma senha em 'Criar Nova Conta' para acessar manualmente.")
-                            elif dados_usuario:
-                                st.session_state.logged_in = True
-                                st.session_state.username = login_user
-                                st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
-                                perfil_carregado = dados_usuario.get("perfil")
-                                st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
-                                st.session_state.despensa = carregar_despensa(login_user)
-                                st.rerun()
-                            else: 
-                                st.error("E-mail ou senha incorretos.")
-                    else: st.warning("Preencha todos os campos.")
-                        
-                st.markdown("<div style='text-align: center; margin: 15px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
-                if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
-                
+        with st.container(border=True):
+            st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse sua conta</h4>", unsafe_allow_html=True)
+            login_user = st.text_input("E-mail", placeholder="ex: seu@email.com", label_visibility="collapsed").lower()
+            login_senha = st.text_input("Senha", type="password", placeholder="Sua senha secreta", label_visibility="collapsed")
+            
             st.write("")
-            st.markdown("<hr style='margin: 10px 0; opacity: 0.2'>", unsafe_allow_html=True)
-            if st.button("Não tem conta? Criar Nova Conta", use_container_width=True):
-                modal_registo()
+            if st.button("Entrar no App", use_container_width=True, type="primary"):
+                if login_user and login_senha:
+                    with st.spinner("🔄 Conectando aos servidores seguros..."):
+                        dados_usuario = validar_login(login_user, login_senha)
+                        
+                        if dados_usuario == "google_only":
+                            st.warning("🔗 Conta Google detectada! Faça login com o botão abaixo ou crie uma senha em 'Criar Nova Conta' para acessar manualmente.")
+                        elif dados_usuario:
+                            st.session_state.logged_in = True
+                            st.session_state.username = login_user
+                            st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
+                            perfil_carregado = dados_usuario.get("perfil")
+                            st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
+                            st.session_state.despensa = carregar_despensa(login_user)
+                            st.rerun()
+                        else: 
+                            st.error("E-mail ou senha incorretos.")
+                else: st.warning("Preencha todos os campos.")
+                    
+            st.markdown("<div style='text-align: center; margin: 15px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
+            if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
+            
+        st.write("")
+        st.markdown("<hr style='margin: 10px 0; opacity: 0.2'>", unsafe_allow_html=True)
+        if st.button("Não tem conta? Criar Nova Conta", use_container_width=True):
+            modal_registo()
 
 # ==========================================
 # MÓDULO 2: O APLICATIVO E ONBOARDING
@@ -382,7 +432,6 @@ if not st.session_state.logged_in:
 else:
     perfil_seguro = st.session_state.perfil if isinstance(st.session_state.perfil, dict) else {}
     
-    # FLUXO DE ONBOARDING MÁGICO
     onboarding_pronto = perfil_seguro.get("onboarding_concluido", False)
     
     if not onboarding_pronto:
@@ -575,7 +624,6 @@ else:
                         st.markdown("<h4 class='adapt-text' style='margin-bottom:0;'>🍏 Plano Básico</h4>", unsafe_allow_html=True)
                         st.info("Você está usando a versão gratuita. Suas funções são limitadas.")
                         
-                        # INTEGRAÇÃO DO MERCADO PAGO AQUI
                         link_mp = gerar_checkout_mercadopago(st.session_state.username)
                         if link_mp:
                             st.link_button("💳 Pagar com Mercado Pago", url=link_mp, type="primary", use_container_width=True)
@@ -647,9 +695,9 @@ else:
                     st.markdown(f"<h2 style='text-align: center; color: #FF9500; margin-top: 0;'>{streak_atual} <span style='font-size: 1rem; color: var(--text-secondary);'>dias</span></h2>", unsafe_allow_html=True)
 
             dicas = [
-                "Beba um copo de água logo ao acordar para despertar o seu metabolismo.",
+                "Beba um copo de água logo ao acordar para despertar seu metabolismo.",
                 "As fibras ajudam na saciedade. Inclua aveia ou frutas com casca nos lanches!",
-                "O sono é crucial. Tente dormir 7 a 8 horas para regular as hormonas da fome.",
+                "O sono é crucial. Tente dormir 7 a 8 horas para regular os hormônios da fome.",
                 "Mastigue devagar! O cérebro leva cerca de 20 minutos para perceber que está satisfeito.",
                 "Evite telas 1 hora antes de dormir para melhorar a regulação da insulina no dia seguinte.",
                 "Proteína em todas as refeições ajuda a manter a massa magra e controla a glicemia.",
@@ -824,7 +872,7 @@ else:
                     if not tem_estoque:
                         with st.container(border=True):
                             st.markdown("<h4 class='adapt-text'>✨ 2. Sua despensa parece estar vazia!</h4>", unsafe_allow_html=True)
-                            st.write("Para que a IA crie um cardápio perfeito e sem desperdícios, adicione o que você tem na geladeira agora:")
+                            st.write("Para que a IA crie um cardápio perfeito e sem desperdícios, adicione o que tem na geladeira agora:")
                             n_nome = st.text_input("🛒 O que tem na geladeira?", key="fast_alimento", placeholder="Ex: Ovos, Frango, Aveia...")
                             n_qtd = st.number_input("Quantidade", min_value=1.0, step=1.0, key="fast_qtd")
                             if st.button("➕ Salvar na Despensa", type="primary", use_container_width=True):
