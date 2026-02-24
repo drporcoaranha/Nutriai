@@ -74,7 +74,7 @@ GOOGLE_SVG = """
 </svg>
 """
 
-# --- 4. FUNÇÕES DE BANCO DE DADOS (C/ FUSÃO DE CONTAS) ---
+# --- 4. FUNÇÕES DE BANCO DE DADOS ---
 def hash_senha(senha):
     return hashlib.sha256(str.encode(senha)).hexdigest()
 
@@ -83,10 +83,8 @@ def validar_login(email, senha):
         res = supabase.table('users').select('*').eq('username', email.lower()).execute()
         if len(res.data) > 0:
             user = res.data[0]
-            # Valida a senha real
             if user.get('senha') == hash_senha(senha):
                 return user
-            # Se tentar logar com senha e for conta só Google
             elif user.get('senha') == hash_senha("google_sso_senha_dummy"):
                 return "google_only"
     except Exception as e: pass
@@ -97,11 +95,10 @@ def criar_conta(email, nome, senha):
         res = supabase.table('users').select('*').eq('username', email.lower()).execute()
         if len(res.data) > 0:
             user = res.data[0]
-            # MERGE: Se a conta foi criada pelo Google, permite definir uma senha nativa
             if user.get('senha') == hash_senha("google_sso_senha_dummy"):
                 supabase.table('users').update({"senha": hash_senha(senha)}).eq('username', email.lower()).execute()
                 return True
-            return False # Se já tem uma senha normal, recusa a criação
+            return False 
             
         novo_perfil = {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento", "atividade": "Moderada", "foto": None, "streak": 1, "last_login": "", "historico_peso": [], "plano": "gratis", "rotina": {}, "rotina_preenchida": False, "onboarding_concluido": False, "agua_diaria": {"data": "", "copos": 0}}
         supabase.table('users').insert({"username": email.lower(), "nome": nome, "senha": hash_senha(senha), "perfil": novo_perfil}).execute()
@@ -270,7 +267,6 @@ st.markdown(f"""
 # ==========================================
 if not st.session_state.logged_in:
     
-    # MODAL DE REGISTO (SOBREPOSIÇÃO)
     @st.dialog("✨ Criar Nova Conta")
     def modal_registo():
         st.markdown("<p style='text-align: center; color: var(--text-secondary); margin-top:-10px; margin-bottom:20px;'>Preencha os seus dados para iniciar a jornada.</p>", unsafe_allow_html=True)
@@ -345,7 +341,6 @@ if not st.session_state.logged_in:
 else:
     perfil_seguro = st.session_state.perfil if isinstance(st.session_state.perfil, dict) else {}
     
-    # FLUXO DE ONBOARDING MÁGICO
     onboarding_pronto = perfil_seguro.get("onboarding_concluido", False)
     
     if not onboarding_pronto:
@@ -651,6 +646,7 @@ else:
                 st.success("🎉 Tudo abastecido! Não falta nada no seu estoque.")
 
     with tab3:
+        # 🚨 BOTÃO DE PÂNICO ISOLADO NO TOPO 🚨
         if st.session_state.cardapio_atual is not None:
             c1, c2 = st.columns([2.5, 1], vertical_alignment="center")
             c1.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 0;'>🍽️ Plano IA</h3>", unsafe_allow_html=True)
@@ -664,6 +660,25 @@ else:
             st.write("")
         else:
             st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🍽️ Plano Alimentar IA</h3>", unsafe_allow_html=True)
+        
+        # 🚨 ÁGUA SEMPRE VISÍVEL NO TOPO 🚨
+        with st.container(border=True):
+            st.markdown("<h4 class='adapt-text' style='font-weight: 700; font-size: 1rem; margin-bottom: 5px;'>💧 Hidratação Diária</h4>", unsafe_allow_html=True)
+            copos = st.session_state.perfil["agua_diaria"].get("copos", 0)
+            col_menos, col_num, col_mais = st.columns([1, 2, 1], vertical_alignment="center")
+            
+            if col_menos.button("➖", use_container_width=True, key="agua_menos"):
+                st.session_state.perfil["agua_diaria"]["copos"] = max(0, copos - 1)
+                salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                st.rerun()
+                
+            col_num.markdown(f"<div style='text-align: center; font-size: 1.5rem; font-weight: 800; color: var(--text-primary);'>{copos} copos</div>", unsafe_allow_html=True)
+            
+            if col_mais.button("➕", use_container_width=True, type="primary", key="agua_mais"):
+                st.session_state.perfil["agua_diaria"]["copos"] = copos + 1
+                salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                st.rerun()
+        st.write("")
         
         tem_rotina = st.session_state.perfil.get("rotina_preenchida", False)
         df_temp_check = st.session_state.despensa.copy()
@@ -694,8 +709,10 @@ else:
                             rot = st.session_state.perfil.get("rotina", {})
                             t_prep = st.session_state.perfil.get("tempo_preparo", 30)
                             
+                            # CULTURA BRASILEIRA IMPLANTADA NO PROMPT
                             prompt = f"""
                             Nutricionista Clínico. Crie o cardápio real de hoje usando APENAS O ESTOQUE.
+                            CULTURA: Culinária típica brasileira. PROIBIDO salada, folhas ou espinafre no café da manhã (use ovos, pão, aveia, queijo, etc, se disponíveis).
                             BIOMETRIA: {dados_perfil_ia}
                             AGENDA: Acorda {rot.get('acordar','06:30')} | Trab {rot.get('trab_inicio','08:00')}-{rot.get('trab_fim','17:30')} | Transito {rot.get('trans_inicio','17:30')}-{rot.get('trans_fim','18:30')} | Treino {rot.get('treino_inicio','19:00')}-{rot.get('treino_fim','20:00')} | Estudo {rot.get('estudo_inicio','20:30')}-{rot.get('estudo_fim','22:00')} | Dorme {rot.get('dormir','23:00')} | Prep. Máx: {t_prep} min.
                             ESTOQUE: {despensa_ativa.to_dict(orient="records")}
@@ -785,24 +802,6 @@ else:
                     c2.markdown(f"<span style='font-size: 0.9rem; font-weight: 600; color: var(--text-primary);'>🥩 Prot</span><br><span style='font-size: 0.8rem; color: var(--text-secondary);'>{cons_prot}/{tot_prot}g</span><div class='macro-bar-container'><div class='macro-bar-fill bg-prot' style='width: {pct_prot}%;'></div></div>", unsafe_allow_html=True)
                     c3.markdown(f"<span style='font-size: 0.9rem; font-weight: 600; color: var(--text-primary);'>🌾 Carb</span><br><span style='font-size: 0.8rem; color: var(--text-secondary);'>{cons_carb}/{tot_carb}g</span><div class='macro-bar-container'><div class='macro-bar-fill bg-carb' style='width: {pct_carb}%;'></div></div>", unsafe_allow_html=True)
                     c4.markdown(f"<span style='font-size: 0.9rem; font-weight: 600; color: var(--text-primary);'>🥑 Gord</span><br><span style='font-size: 0.8rem; color: var(--text-secondary);'>{cons_gord}/{tot_gord}g</span><div class='macro-bar-container'><div class='macro-bar-fill bg-gord' style='width: {pct_gord}%;'></div></div>", unsafe_allow_html=True)
-
-                st.write("")
-                with st.container(border=True):
-                    st.markdown("<h4 class='adapt-text' style='font-weight: 700; font-size: 1rem; margin-bottom: 5px;'>💧 Hidratação Diária</h4>", unsafe_allow_html=True)
-                    copos = st.session_state.perfil["agua_diaria"].get("copos", 0)
-                    col_menos, col_num, col_mais = st.columns([1, 2, 1], vertical_alignment="center")
-                    
-                    if col_menos.button("➖", use_container_width=True, key="agua_menos"):
-                        st.session_state.perfil["agua_diaria"]["copos"] = max(0, copos - 1)
-                        salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
-                        st.rerun()
-                        
-                    col_num.markdown(f"<div style='text-align: center; font-size: 1.5rem; font-weight: 800; color: var(--text-primary);'>{copos} copos</div>", unsafe_allow_html=True)
-                    
-                    if col_mais.button("➕", use_container_width=True, type="primary", key="agua_mais"):
-                        st.session_state.perfil["agua_diaria"]["copos"] = copos + 1
-                        salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
-                        st.rerun()
 
                 st.write("")
                 if isinstance(refeicoes, list):
@@ -922,6 +921,7 @@ else:
                     with st.spinner("A mapear o seu biotipo de forma clínica..."):
                         prompt_ideal = f"""
                         Nutricionista especialista. Crie um PLANO DE METAS e ESTRUTURAÇÃO DE PRATOS. IGNORAR ESTOQUE.
+                        CULTURA: Culinária típica brasileira. PROIBIDO salada, folhas ou espinafre no café da manhã.
                         BIOMETRIA: {dados_perfil_ia}
                         REGRAS: Carbo Complexo SEMPRE com Proteína/Gordura Boa. Nenhuma salada matinal.
                         AGENDA: Acorda {hora_acordar.strftime('%H:%M')} | Trab {trab_inicio.strftime('%H:%M')} às {trab_fim.strftime('%H:%M')} | Tempo cozinhar: {tempo_preparo} min.
@@ -976,7 +976,7 @@ else:
                     with st.chat_message("assistant"):
                         with st.spinner("A Nutri está a escrever..."):
                             try:
-                                conteudo_ia = [f"Você é a NutryAi, Nutricionista Clínica. O paciente tem o seguinte perfil: {dados_perfil_ia}. Avalie impactos na insulina se o paciente perguntar sobre alimentos ou fotos.", prompt_chat]
+                                conteudo_ia = [f"Você é a NutryAi, Nutricionista Clínica brasileira. O paciente tem o seguinte perfil: {dados_perfil_ia}. Avalie impactos na insulina. Cultura alimentar estritamente brasileira (ex: nada de salada no café da manhã).", prompt_chat]
                                 if foto_upload:
                                     imagem_pil = Image.open(foto_upload)
                                     conteudo_ia.append(imagem_pil)
@@ -984,3 +984,4 @@ else:
                                 st.markdown(resposta_chat.text)
                                 st.session_state.chat_history.append({"role": "assistant", "content": resposta_chat.text})
                             except Exception as e: st.error(f"Erro na resposta: {e}")
+
