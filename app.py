@@ -275,7 +275,7 @@ if not st.session_state.logged_in:
         cad_senha = st.text_input("Crie uma senha segura", type="password")
         
         st.write("")
-        if st.button("Finalizar Registo", type="primary", use_container_width=True):
+        if st.button("Finalizar Cadastro", type="primary", use_container_width=True):
             if cad_nome and cad_email and cad_senha:
                 if "@" in cad_email and "." in cad_email:
                     if criar_conta(cad_email, cad_nome, cad_senha):
@@ -303,22 +303,22 @@ if not st.session_state.logged_in:
                 st.session_state.cadastro_sucesso = False
 
             with st.container(border=True):
-                st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse à sua conta</h4>", unsafe_allow_html=True)
+                st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse sua conta</h4>", unsafe_allow_html=True)
                 login_user = st.text_input("E-mail", placeholder="ex: o_seu@email.com", label_visibility="collapsed").lower()
                 login_senha = st.text_input("Senha", type="password", placeholder="A sua senha secreta", label_visibility="collapsed")
                 
                 st.write("")
                 if st.button("Entrar no App", use_container_width=True, type="primary"):
                     if login_user and login_senha:
-                        with st.spinner("🔄 A ligar aos servidores seguros..."):
+                        with st.spinner("🔄 Conectando aos servidores seguros..."):
                             dados_usuario = validar_login(login_user, login_senha)
                             
                             if dados_usuario == "google_only":
-                                st.warning("🔗 Conta Google detetada! Faça login com o botão abaixo ou crie uma senha em 'Criar Nova Conta' para aceder manualmente.")
+                                st.warning("🔗 Conta Google detectada! Faça login com o botão abaixo ou crie uma senha em 'Criar Nova Conta' para acessar manualmente.")
                             elif dados_usuario:
                                 st.session_state.logged_in = True
                                 st.session_state.username = login_user
-                                st.session_state.nome_usuario = dados_usuario.get("nome", "Utilizador")
+                                st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
                                 perfil_carregado = dados_usuario.get("perfil")
                                 st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
                                 st.session_state.despensa = carregar_despensa(login_user)
@@ -349,7 +349,7 @@ else:
             <div style='text-align: center; padding: 20px 10px;'>
                 <h1 style='font-size: 4rem; margin-bottom: 5px;'>🍏</h1>
                 <h2 class='adapt-text' style='font-weight: 800;'>Bem-vindo ao NutryAi!</h2>
-                <p class='sub-text' style='margin-bottom: 25px;'>Para a Inteligência Artificial criar planos perfeitos para si, precisamos de 4 detalhes rápidos.</p>
+                <p class='sub-text' style='margin-bottom: 25px;'>Para a Inteligência Artificial criar planos perfeitos para você, precisamos de 4 detalhes rápidos.</p>
             </div>
         """, unsafe_allow_html=True)
         
@@ -361,7 +361,7 @@ else:
             ob_atv = st.selectbox("Seu Nível de Atividade", ["Sedentário", "Leve", "Moderada", "Intensa"], index=2)
             
             st.write("")
-            if st.button("✨ Começar a minha Jornada", type="primary", use_container_width=True):
+            if st.button("✨ Começar minha Jornada", type="primary", use_container_width=True):
                 st.session_state.perfil.update({
                     "idade": ob_idade, "peso": ob_peso, "altura": ob_altura, 
                     "objetivo": ob_obj, "atividade": ob_atv, "onboarding_concluido": True
@@ -381,7 +381,7 @@ else:
             n_qtd = st.number_input("Quantidade", min_value=0.1, step=1.0)
             n_unidade = st.selectbox("Unidade de Medida", ["g", "kg", "ml", "L", "un", "dose", "colher"])
             n_pronto = st.radio("Consumo Rápido?", ["Não", "Sim"], horizontal=True)
-            if st.button("Guardar no Estoque", type="primary", use_container_width=True):
+            if st.button("Salvar no Estoque", type="primary", use_container_width=True):
                 if n_nome:
                     nome_fmt = n_nome.strip().capitalize()
                     df = st.session_state.despensa
@@ -414,19 +414,19 @@ else:
         @st.dialog("📱 Como Instalar o App")
         def modal_instalar_app():
             st.markdown("""
-            O NutryAi pode ficar salvo no ecrã inicial do seu telemóvel, igual aos outros aplicativos!
+            O NutryAi pode ficar salvo na tela inicial do seu celular, igual aos outros aplicativos!
             
             **🍎 No iPhone (Safari):**
-            1. Toque no ícone de **Partilhar** (o quadrado com a setinha para cima no rodapé do navegador).
-            2. Role um pouco para baixo e selecione **"Adicionar ao Ecrã Principal"** (Add to Home Screen).
+            1. Toque no ícone de **Compartilhar** (o quadrado com a setinha para cima no rodapé do navegador).
+            2. Role um pouco para baixo e selecione **"Adicionar à Tela de Início"** (Add to Home Screen).
             3. Confirme clicando em **"Adicionar"**.
 
             **🤖 No Android (Chrome):**
             1. Toque nos **3 pontinhos** no canto superior direito do navegador.
-            2. Selecione **"Adicionar ao ecrã inicial"** ou **"Instalar aplicativo"**.
-            3. Confirme e já está!
+            2. Selecione **"Adicionar à tela inicial"** ou **"Instalar aplicativo"**.
+            3. Confirme e pronto!
             
-            Da próxima vez, basta clicar no ícone da Maçã Verde 🍏 direto no seu telemóvel para abrir a app em ecrã inteiro!
+            Da próxima vez, basta clicar no ícone da Maçã Verde 🍏 direto no seu celular para abrir o app em tela cheia!
             """)
 
         p_idade = safe_int(perfil_seguro.get("idade"), 30)
@@ -462,10 +462,15 @@ else:
             st.session_state.perfil["streak"] = streak_atual
             salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
 
+        # 🚨 CÁLCULOS GLOBAIS DE ÁGUA 🚨
         agua_memoria = perfil_seguro.get("agua_diaria", {})
         if agua_memoria.get("data") != hoje_str:
             agua_memoria = {"data": hoje_str, "copos": 0}
             st.session_state.perfil["agua_diaria"] = agua_memoria
+            
+        copos_atuais = st.session_state.perfil["agua_diaria"].get("copos", 0)
+        meta_ml = p_peso * 35
+        meta_copos = max(4, int(round(meta_ml / 250)))
 
         hora_atual = datetime.now(fuso_local).hour
         if hora_atual < 12: saudacao = "Bom dia"
@@ -510,7 +515,7 @@ else:
                 with tab_plan:
                     if eh_pro:
                         st.markdown("<h4 class='adapt-text' style='margin-bottom:0;'>👑 NutryAi PRO</h4>", unsafe_allow_html=True)
-                        st.success("A sua assinatura está ativa e a funcionar perfeitamente.")
+                        st.success("A sua assinatura está ativa e funcionando perfeitamente.")
                         
                         data_ass = perfil_seguro.get("data_assinatura")
                         if not data_ass:
@@ -524,11 +529,11 @@ else:
                             
                         st.markdown(f"**Próxima Renovação:** {vencimento}")
                         st.markdown("**Status:** Renovação Automática (Stripe)")
-                        if st.button("Gerir Assinatura", use_container_width=True):
-                            st.toast("O painel da Stripe será ligado aqui brevemente.")
+                        if st.button("Gerenciar Assinatura", use_container_width=True):
+                            st.toast("O painel da Stripe será conectado aqui em breve.")
                     else:
                         st.markdown("<h4 class='adapt-text' style='margin-bottom:0;'>🍏 Plano Básico</h4>", unsafe_allow_html=True)
-                        st.info("Está a usar a versão gratuita. As suas funções são limitadas.")
+                        st.info("Você está usando a versão gratuita. Suas funções são limitadas.")
                         if st.button("🌟 Fazer Upgrade", type="primary", use_container_width=True):
                             st.session_state.perfil["plano"] = "premium"
                             st.session_state.perfil["data_assinatura"] = hoje_str
@@ -538,13 +543,13 @@ else:
                             st.rerun()
                     
                     st.divider()
-                    st.markdown("<h4 class='adapt-text' style='margin-bottom:5px;'>📱 App de Telemóvel</h4>", unsafe_allow_html=True)
-                    st.caption("Guarde o NutryAi direto no seu ecrã inicial para não precisar de abrir o navegador:")
-                    if st.button("Como Instalar a App?", use_container_width=True):
+                    st.markdown("<h4 class='adapt-text' style='margin-bottom:5px;'>📱 App de Celular</h4>", unsafe_allow_html=True)
+                    st.caption("Salve o NutryAi direto na sua tela inicial para não precisar abrir o navegador:")
+                    if st.button("Como Instalar o App?", use_container_width=True):
                         modal_instalar_app()
                 
                 st.write("")
-                if st.button("💾 Guardar Perfil", type="primary", use_container_width=True):
+                if st.button("💾 Salvar Perfil", type="primary", use_container_width=True):
                     if nova_foto:
                         img = Image.open(nova_foto)
                         img.thumbnail((200, 200)) 
@@ -561,11 +566,61 @@ else:
                 st.divider()
                 if st.button("🚪 Sair da Conta", use_container_width=True): fazer_logout()
 
-        # 🚨 NOVO LAYOUT DE ABAS (INCLUINDO ÁGUA 💧) 🚨
-        tab_rotina, tab_estoque, tab_plano, tab_agua, tab_grafico, tab_pro, tab_chat = st.tabs(["🕒", "📦", "🍽️", "💧", "📈", "👑", "💬"])
+        # 🚨 ADIÇÃO DA ABA HOME (🏠) COMO A PRIMEIRA 🚨
+        tab_home, tab_rotina, tab_estoque, tab_plano, tab_agua, tab_grafico, tab_pro, tab_chat = st.tabs(["🏠", "🕒", "📦", "🍽️", "💧", "📈", "👑", "💬"])
+
+        with tab_home:
+            st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🏠 Resumo do Dia</h3>", unsafe_allow_html=True)
+            
+            # Painel do Cardápio
+            with st.container(border=True):
+                st.markdown("<h4 class='adapt-text' style='margin-bottom: 5px;'>🍽️ Seu Menu</h4>", unsafe_allow_html=True)
+                if st.session_state.cardapio_atual:
+                    refeicoes = st.session_state.cardapio_atual.get("refeicoes", [])
+                    total_ref = len(refeicoes) if isinstance(refeicoes, list) else 0
+                    comidas = len([r for i, r in enumerate(refeicoes) if f"ref_{i}" in st.session_state.consumidos])
+                    
+                    if total_ref > 0:
+                        pct_menu = comidas / total_ref
+                        st.progress(pct_menu)
+                        if pct_menu == 1.0:
+                            st.success("🎉 Todas as refeições concluídas! Excelente trabalho.")
+                        else:
+                            st.info(f"Progresso: {comidas} de {total_ref} refeições. Continue firme na aba 🍽️!")
+                else:
+                    st.write("Vá até a aba de **Plano Alimentar (🍽️)** para gerar o seu cardápio personalizado com o que você tem na despensa hoje.")
+            
+            # Cards de Água e Ofensiva Lado a Lado
+            c_agua, c_streak = st.columns(2)
+            with c_agua:
+                with st.container(border=True):
+                    st.markdown("<h4 style='text-align: center; margin-bottom: 5px; color: var(--text-primary);'>💧 Água</h4>", unsafe_allow_html=True)
+                    st.markdown(f"<h2 style='text-align: center; color: #007AFF; margin-top: 0;'>{copos_atuais}<span style='font-size: 1rem; color: var(--text-secondary);'>/{meta_copos}</span></h2>", unsafe_allow_html=True)
+                    
+            with c_streak:
+                with st.container(border=True):
+                    st.markdown("<h4 style='text-align: center; margin-bottom: 5px; color: var(--text-primary);'>🔥 Ofensiva</h4>", unsafe_allow_html=True)
+                    st.markdown(f"<h2 style='text-align: center; color: #FF9500; margin-top: 0;'>{streak_atual} <span style='font-size: 1rem; color: var(--text-secondary);'>dias</span></h2>", unsafe_allow_html=True)
+
+            # Dica Rotativa da Nutri
+            dicas = [
+                "Beba um copo de água logo ao acordar para despertar o seu metabolismo.",
+                "As fibras ajudam na saciedade. Inclua aveia ou frutas com casca nos lanches!",
+                "O sono é crucial. Tente dormir 7 a 8 horas para regular as hormonas da fome.",
+                "Mastigue devagar! O cérebro leva cerca de 20 minutos para perceber que está satisfeito.",
+                "Evite telas 1 hora antes de dormir para melhorar a regulação da insulina no dia seguinte.",
+                "Proteína em todas as refeições ajuda a manter a massa magra e controla a glicemia.",
+                "Caminhar 10 a 15 minutos após as grandes refeições reduz os picos de açúcar no sangue."
+            ]
+            dia_ano = datetime.now(fuso_local).timetuple().tm_yday
+            dica_hoje = dicas[dia_ano % len(dicas)]
+            
+            with st.container(border=True):
+                st.markdown("<h4 class='adapt-text'>💡 Dica da Nutri</h4>", unsafe_allow_html=True)
+                st.write(f"*{dica_hoje}*")
 
         with tab_rotina:
-            st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🕒 A Sua Rotina</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🕒 Sua Rotina</h3>", unsafe_allow_html=True)
             
             rotina_salva = st.session_state.perfil.get("rotina", {})
             tempo_prep_salvo = safe_int(st.session_state.perfil.get("tempo_preparo"), 30)
@@ -589,7 +644,7 @@ else:
                 st.divider()
                 tempo_preparo = st.slider("⏱️ Tempo livre para cozinhar (min/dia)", 0, 120, tempo_prep_salvo)
                 
-                if st.button("Guardar Rotina", use_container_width=True, type="primary"):
+                if st.button("Salvar Rotina", use_container_width=True, type="primary"):
                     st.session_state.perfil["rotina"] = {
                         "acordar": hora_acordar.strftime("%H:%M"), "dormir": hora_dormir.strftime("%H:%M"),
                         "trab_inicio": trab_inicio.strftime("%H:%M"), "trab_fim": trab_fim.strftime("%H:%M"),
@@ -603,7 +658,7 @@ else:
                     
                     st.session_state.cardapio_atual = None
                     st.session_state.consumidos = set()
-                    st.toast("✅ Horários guardados na base de dados!")
+                    st.toast("✅ Horários salvos no banco de dados!")
                     time.sleep(0.5)
                     st.rerun()
 
@@ -627,7 +682,7 @@ else:
                     df_visual.set_index("Alimento", inplace=True)
                     st.table(df_visual[["Disponível"]])
                 else:
-                    st.info("A sua geladeira está vazia no aplicativo.")
+                    st.info("Sua geladeira está vazia no aplicativo.")
                 
             st.write("")
             st.markdown("<h4 class='adapt-text' style='font-weight: 700;'>📝 Lista Inteligente</h4>", unsafe_allow_html=True)
@@ -674,7 +729,7 @@ else:
                     <div style='text-align: center; padding: 40px 20px;'>
                         <h1 style='font-size: 4rem; margin-bottom: 5px; opacity: 0.8;'>🥗</h1>
                         <h3 class='adapt-text' style='font-weight: 700; margin-bottom: 5px;'>Tudo pronto!</h3>
-                        <p class='sub-text' style='margin-bottom: 25px;'>A sua rotina e a sua despensa estão configuradas. Vamos criar o plano de hoje?</p>
+                        <p class='sub-text' style='margin-bottom: 25px;'>Sua rotina e sua despensa estão configuradas. Vamos criar o plano de hoje?</p>
                     </div>
                     """, unsafe_allow_html=True)
                     
@@ -682,7 +737,7 @@ else:
                         if not api_configurada: 
                             st.error("⚠️ Inteligência Artificial offline.")
                         else:
-                            with st.spinner("A analisar a sua rotina e despensa..."):
+                            with st.spinner("Analisando sua rotina e despensa..."):
                                 df_temp = st.session_state.despensa.copy()
                                 df_temp['Quantidade_Num'] = pd.to_numeric(df_temp['Quantidade'], errors='coerce').fillna(0)
                                 despensa_ativa = df_temp[df_temp["Quantidade_Num"] > 0]
@@ -711,11 +766,11 @@ else:
                                     st.rerun()
                                 except Exception as e: st.error("A IA gerou um plano vazio ou num formato irreconhecível. Tente clicar em Gerar novamente.")
                 else:
-                    st.warning("✨ Falta pouco para a Inteligência Artificial assumir o controlo!")
+                    st.warning("✨ Falta pouco para a Inteligência Artificial assumir o controle!")
                     if not tem_rotina:
                         with st.container(border=True):
-                            st.markdown("<h4 class='adapt-text'>🕒 1. A que horas o seu dia começa?</h4>", unsafe_allow_html=True)
-                            st.write("A IA precisa conhecer a sua rotina para encaixar os lanches nos melhores momentos.")
+                            st.markdown("<h4 class='adapt-text'>🕒 1. Que horas o seu dia começa?</h4>", unsafe_allow_html=True)
+                            st.write("A IA precisa conhecer sua rotina para encaixar os lanches nos melhores momentos.")
                             if st.button("Usar Horários Padrões", use_container_width=True):
                                 st.session_state.perfil["rotina"] = {"acordar": "07:00", "dormir": "23:00", "trab_inicio": "08:00", "trab_fim": "18:00", "trans_inicio": "18:00", "trans_fim": "19:00", "treino_inicio": "19:00", "treino_fim": "20:00", "estudo_inicio": "20:30", "estudo_fim": "22:00"}
                                 st.session_state.perfil["tempo_preparo"] = 30
@@ -725,11 +780,11 @@ else:
                                 
                     if not tem_estoque:
                         with st.container(border=True):
-                            st.markdown("<h4 class='adapt-text'>✨ 2. A sua despensa parece estar vazia!</h4>", unsafe_allow_html=True)
+                            st.markdown("<h4 class='adapt-text'>✨ 2. Sua despensa parece estar vazia!</h4>", unsafe_allow_html=True)
                             st.write("Para que a IA crie um cardápio perfeito e sem desperdícios, adicione o que tem na geladeira agora:")
                             n_nome = st.text_input("🛒 O que tem na geladeira?", key="fast_alimento", placeholder="Ex: Ovos, Frango, Aveia...")
                             n_qtd = st.number_input("Quantidade", min_value=1.0, step=1.0, key="fast_qtd")
-                            if st.button("➕ Guardar na Despensa", type="primary", use_container_width=True):
+                            if st.button("➕ Salvar na Despensa", type="primary", use_container_width=True):
                                 if n_nome:
                                     nome_fmt = n_nome.strip().capitalize()
                                     df = st.session_state.despensa
@@ -784,7 +839,7 @@ else:
 
                     st.write("")
                     if isinstance(refeicoes, list):
-                        texto_exportacao = "🍽️ *O Meu Plano NutryAi de Hoje*\n\n"
+                        texto_exportacao = "🍽️ *Meu Plano NutryAi de Hoje*\n\n"
                         
                         for i, ref in enumerate(refeicoes):
                             if not isinstance(ref, dict): continue
@@ -836,21 +891,13 @@ else:
                 except Exception as e:
                     st.error("A Inteligência Artificial estruturou mal o seu cardápio. Clique em 'Limpar Tudo' no topo da página para recriar.")
 
-        # 🚨 NOVA ABA EXCLUSIVA: ÁGUA (HIDRATAÇÃO) 🚨
         with tab_agua:
             st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>💧 Hidratação Diária</h3>", unsafe_allow_html=True)
             
-            copos = st.session_state.perfil["agua_diaria"].get("copos", 0)
-            
-            # Cálculo de meta: 35ml por kg. Dividido em copos de 250ml. Mínimo de 4 copos.
-            meta_ml = p_peso * 35
-            meta_copos = max(4, int(round(meta_ml / 250)))
-            pct_agua = min(copos / meta_copos, 1.0) if meta_copos > 0 else 0
-            
-            # Matemática para desenhar o círculo no SVG
-            dash_array = 283 # Circunferência aproximada de raio 45 (2 * pi * 45)
+            pct_agua = min(copos_atuais / meta_copos, 1.0) if meta_copos > 0 else 0
+            dash_array = 283 
             dash_offset = dash_array - (dash_array * pct_agua)
-            cor_anel = "#32D74B" if pct_agua >= 1.0 else "#007AFF" # Fica verde ao atingir a meta!
+            cor_anel = "#32D74B" if pct_agua >= 1.0 else "#007AFF" 
             
             st.markdown(f"""
             <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 20px;">
@@ -860,26 +907,26 @@ else:
                             stroke-dasharray="{dash_array}" stroke-dashoffset="{dash_offset}" 
                             stroke-linecap="round" transform="rotate(-90 50 50)" 
                             style="transition: stroke-dashoffset 0.8s ease-in-out, stroke 0.8s ease;" />
-                    <text x="50" y="45" font-family="sans-serif" font-size="22" font-weight="800" fill="var(--text-primary)" text-anchor="middle" dominant-baseline="middle">{copos}</text>
+                    <text x="50" y="45" font-family="sans-serif" font-size="22" font-weight="800" fill="var(--text-primary)" text-anchor="middle" dominant-baseline="middle">{copos_atuais}</text>
                     <text x="50" y="65" font-family="sans-serif" font-size="10" font-weight="600" fill="var(--text-secondary)" text-anchor="middle" dominant-baseline="middle">/ {meta_copos} copos</text>
                 </svg>
             </div>
             """, unsafe_allow_html=True)
             
-            st.markdown(f"<p style='text-align:center; color: var(--text-secondary); margin-top:-10px; margin-bottom: 20px;'>A sua meta ideal: <b>{int(meta_ml)}ml</b> (copos de 250ml)</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='text-align:center; color: var(--text-secondary); margin-top:-10px; margin-bottom: 20px;'>Sua meta ideal: <b>{int(meta_ml)}ml</b> (copos de 250ml)</p>", unsafe_allow_html=True)
             
             col_menos, col_vazio, col_mais = st.columns([1, 1, 1])
             with col_menos:
-                if st.button("➖ Tirar Copo", use_container_width=True):
-                    st.session_state.perfil["agua_diaria"]["copos"] = max(0, copos - 1)
+                if st.button("➖ Copo", use_container_width=True):
+                    st.session_state.perfil["agua_diaria"]["copos"] = max(0, copos_atuais - 1)
                     salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                     st.rerun()
             with col_mais:
-                if st.button("➕ Beber Água", use_container_width=True, type="primary"):
-                    st.session_state.perfil["agua_diaria"]["copos"] = copos + 1
+                if st.button("➕ Copo", use_container_width=True, type="primary"):
+                    st.session_state.perfil["agua_diaria"]["copos"] = copos_atuais + 1
                     salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                     if st.session_state.perfil["agua_diaria"]["copos"] == meta_copos:
-                        st.balloons() # Comemora quando bate a meta
+                        st.balloons() 
                     st.rerun()
 
         with tab_grafico:
@@ -906,18 +953,18 @@ else:
                     except Exception as e: 
                         st.write("Erro ao desenhar gráfico.")
                 else:
-                    st.info("O seu gráfico aparecerá aqui após o primeiro registo de peso.")
+                    st.info("O seu gráfico aparecerá aqui após o primeiro registro de peso.")
                 
             st.write("")
             c_peso, c_btn = st.columns([2, 1], vertical_alignment="bottom")
             with c_peso: novo_registro = st.number_input("Peso de Hoje (kg)", value=p_peso, step=0.5)
             with c_btn:
-                if st.button("➕ Guardar", use_container_width=True, type="primary"):
+                if st.button("➕ Salvar", use_container_width=True, type="primary"):
                     historico.append({"data": hoje_str, "peso": float(novo_registro)})
                     st.session_state.perfil["historico_peso"] = historico
                     st.session_state.perfil["peso"] = float(novo_registro)
                     salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
-                    st.toast("✅ Peso registado com sucesso!")
+                    st.toast("✅ Peso registrado com sucesso!")
                     time.sleep(0.5)
                     st.rerun()
 
@@ -943,7 +990,7 @@ else:
                 if st.button("✨ Gerar Plano Padrão Ouro", use_container_width=True, type="primary"):
                     if not api_configurada: st.error("⚠️ Configure a chave de API.")
                     else:
-                        with st.spinner("A mapear o seu biotipo de forma clínica..."):
+                        with st.spinner("Mapeando seu biotipo de forma clínica..."):
                             prompt_ideal = f"""
                             Nutricionista especialista. Crie um PLANO DE METAS e ESTRUTURAÇÃO DE PRATOS. IGNORAR ESTOQUE.
                             CULTURA: Culinária típica brasileira. PROIBIDO salada, folhas ou espinafre no café da manhã.
@@ -999,7 +1046,7 @@ else:
                             st.markdown(prompt_chat)
                             if foto_upload: st.image(foto_upload, width=250)
                         with st.chat_message("assistant"):
-                            with st.spinner("A Nutri está a escrever..."):
+                            with st.spinner("A Nutri está digitando..."):
                                 try:
                                     conteudo_ia = [f"Você é a NutryAi, Nutricionista Clínica brasileira. O paciente tem o seguinte perfil: {dados_perfil_ia}. Avalie impactos na insulina se o paciente perguntar sobre alimentos ou fotos.", prompt_chat]
                                     if foto_upload:
