@@ -230,7 +230,6 @@ if "status" in st.query_params and "external_reference" in st.query_params:
     email_pagador = st.query_params.get("external_reference")
     payment_id = st.query_params.get("payment_id")
     
-    # TRAVA ANTI-DUPLICAÇÃO MERCADO PAGO
     if st.session_state.get("ultimo_pagamento_id") == payment_id:
         st.query_params.clear()
     elif status_pagamento == "approved" and email_pagador:
@@ -283,7 +282,6 @@ if "status" in st.query_params and "external_reference" in st.query_params:
 elif not st.session_state.logged_in and "code" in st.query_params:
     codigo_autorizacao = st.query_params["code"]
     
-    # 🚨 TRAVA ANTI-DUPLICAÇÃO GOOGLE (O SEGREDO DA ESTABILIDADE) 🚨
     if st.session_state.get("ultimo_codigo_google") == codigo_autorizacao:
         st.query_params.clear()
     else:
@@ -495,6 +493,18 @@ else:
                         st.session_state.perfil["data_assinatura"] = hoje_str
                         salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
             except: pass
+            
+    # --- 🚨 DADOS GLOBAIS DE BIOMETRIA (O HOTFIX) 🚨 ---
+    p_idade = safe_int(perfil_seguro.get("idade"), 30)
+    p_peso = safe_float(perfil_seguro.get("peso"), 70.0)
+    p_altura = safe_int(perfil_seguro.get("altura"), 170)
+    p_obj = str(perfil_seguro.get("objetivo") or "Emagrecimento")
+    p_atv = str(perfil_seguro.get("atividade") or "Moderada")
+    foto_salva = perfil_seguro.get("foto")
+    streak_atual = safe_int(perfil_seguro.get("streak"), 1)
+    
+    # Esta variável é vital para a IA funcionar!
+    dados_perfil_ia = f"{p_idade} anos, {p_peso}kg, {p_altura}cm. Objetivo: {p_obj}. Ativ: {p_atv}."
     
     onboarding_pronto = perfil_seguro.get("onboarding_concluido", False)
     
@@ -705,14 +715,6 @@ else:
                     st.rerun() 
             else: 
                 st.write("Seu estoque já está vazio.")
-
-        p_idade = safe_int(perfil_seguro.get("idade"), 30)
-        p_peso = safe_float(perfil_seguro.get("peso"), 70.0)
-        p_altura = safe_int(perfil_seguro.get("altura"), 170)
-        p_obj = str(perfil_seguro.get("objetivo") or "Emagrecimento")
-        p_atv = str(perfil_seguro.get("atividade") or "Moderada")
-        foto_salva = perfil_seguro.get("foto")
-        streak_atual = safe_int(perfil_seguro.get("streak"), 1)
 
         ontem = hoje - timedelta(days=1)
         last_login_str = str(perfil_seguro.get("last_login") or "")
