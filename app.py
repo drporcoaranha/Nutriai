@@ -38,6 +38,7 @@ except KeyError:
     st.stop()
 
 MERCADOPAGO_ACCESS_TOKEN = st.secrets.get("MERCADOPAGO_ACCESS_TOKEN", "")
+ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", "admin@nutryai.com").lower() # <--- EMAIL DO DONO AQUI
 
 @st.cache_resource
 def init_connection():
@@ -325,7 +326,7 @@ elif not st.session_state.logged_in and "code" in st.query_params:
         st.query_params.clear()
         st.rerun()
 
-# --- 8. UX CSS PREMIUM E INJEÇÃO DO ÍCONE APPLE ---
+# --- 8. UX CSS PREMIUM ---
 st.markdown(f"""
     <link rel="apple-touch-icon" href="https://emojicdn.elk.sh/1f34f">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -400,6 +401,13 @@ if not st.session_state.logged_in:
                     st.warning("Por favor, insira um e-mail válido.")
             else:
                 st.warning("Preencha todos os campos.")
+                
+    # 🚨 NOVO: MODAL DE ESQUECI A SENHA CONCIERGE 🚨
+    @st.dialog("🔒 Recuperação de Senha")
+    def modal_esqueci_senha():
+        st.write("Para redefinir sua senha de forma segura e imediata, entre em contato com nosso suporte via WhatsApp.")
+        st.write("Nossa equipe confirmará sua identidade e criará uma senha temporária na hora!")
+        st.link_button("🟢 Falar com Suporte (WhatsApp)", "https://wa.me/5511999999999?text=Olá, esqueci a senha do meu aplicativo NutryAi. Podem me ajudar?", type="primary", use_container_width=True)
 
     with st.container():
         st.markdown("""
@@ -438,6 +446,10 @@ if not st.session_state.logged_in:
                         else: 
                             st.error("E-mail ou senha incorretos.")
                 else: st.warning("Preencha todos os campos.")
+                
+            # NOVO BOTÃO DE ESQUECI A SENHA
+            if st.button("Esqueci minha senha", use_container_width=True):
+                modal_esqueci_senha()
                     
             st.markdown("<div style='text-align: center; margin: 15px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
             if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
@@ -458,6 +470,9 @@ else:
     hoje_str = hoje.strftime("%Y-%m-%d")
     
     eh_pro = str(perfil_seguro.get("plano", "gratis")) == "premium"
+    
+    # 🚨 VERIFICA SE O USUÁRIO ATUAL É O DONO DO APP 🚨
+    eh_admin = (st.session_state.username == ADMIN_EMAIL)
     
     if eh_pro:
         data_ass = perfil_seguro.get("data_assinatura")
@@ -506,7 +521,6 @@ else:
                 st.rerun()
                 
     else:
-        # 🚨 MODAL DE AJUSTES ABSOLUTO 🚨
         @st.dialog("⚙️ Configurações da Conta")
         def modal_ajustes():
             p_s = st.session_state.perfil if isinstance(st.session_state.perfil, dict) else {}
@@ -562,8 +576,6 @@ else:
                         st.write(f"**Renovação Automática:** {'✅ Ativada' if auto_renovar else '❌ Desativada'}")
                         
                         st.divider()
-                        
-                        # 🚨 LINK OFICIAL DO MERCADO PAGO 🚨
                         st.link_button("💳 Gerenciar no Mercado Pago", "https://www.mercadopago.com.br/subscriptions", use_container_width=True)
                         
                         st.write("")
@@ -733,7 +745,21 @@ else:
             if st.button("⚙️ Ajustes", use_container_width=True):
                 modal_ajustes()
 
-        tab_home, tab_rotina, tab_estoque, tab_plano, tab_agua, tab_grafico, tab_pro, tab_chat = st.tabs(["🏠", "🕒", "📦", "🍽️", "💧", "📈", "👑", "💬"])
+        # 🚨 ABAS DINÂMICAS: INCLUI ABA ADMIN SE FOR O DONO 🚨
+        titulos_abas = ["🏠", "🕒", "📦", "🍽️", "💧", "📈", "👑", "💬"]
+        if eh_admin: titulos_abas.append("📊 Admin")
+        
+        abas_criadas = st.tabs(titulos_abas)
+        tab_home = abas_criadas[0]
+        tab_rotina = abas_criadas[1]
+        tab_estoque = abas_criadas[2]
+        tab_plano = abas_criadas[3]
+        tab_agua = abas_criadas[4]
+        tab_grafico = abas_criadas[5]
+        tab_pro = abas_criadas[6]
+        tab_chat = abas_criadas[7]
+        
+        if eh_admin: tab_admin = abas_criadas[8]
 
         with tab_home:
             st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🏠 Resumo do Dia</h3>", unsafe_allow_html=True)
@@ -1234,3 +1260,39 @@ else:
                                     st.markdown(resposta_chat.text)
                                     st.session_state.chat_history.append({"role": "assistant", "content": resposta_chat.text})
                                 except Exception as e: st.error(f"Erro na resposta: {e}")
+
+        # 🚨 PAINEL DO FUNDADOR (ADMIN) 🚨
+        if eh_admin:
+            with tab_admin:
+                st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>📊 Painel de Controle (Admin)</h3>", unsafe_allow_html=True)
+                try:
+                    res_all = supabase.table('users').select('*').execute()
+                    users_data = res_all.data
+                    
+                    if users_data:
+                        total_users = len(users_data)
+                        premium_users = sum(1 for u in users_data if u.get('perfil', {}).get('plano') == 'premium')
+                        
+                        c_tot, c_pro = st.columns(2)
+                        with c_tot:
+                            st.info(f"**Total de Usuários:**\n# {total_users}")
+                        with c_pro:
+                            st.success(f"**Assinantes PRO:**\n# {premium_users}")
+                        
+                        st.markdown("#### Lista de Usuários")
+                        lista_limpa = []
+                        for u in users_data:
+                            p = u.get('perfil', {})
+                            lista_limpa.append({
+                                "E-mail": u.get("username"),
+                                "Nome": u.get("nome"),
+                                "Plano": "PRO 👑" if p.get("plano") == "premium" else "Grátis",
+                                "Ofensiva": f"{p.get('streak', 0)} dias"
+                            })
+                        
+                        df_admin = pd.DataFrame(lista_limpa)
+                        st.dataframe(df_admin, use_container_width=True)
+                    else:
+                        st.write("Ainda não há usuários registrados no banco de dados.")
+                except Exception as e:
+                    st.error("Erro ao carregar dados do Supabase.")
