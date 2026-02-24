@@ -224,7 +224,7 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- 7. INTERCEPTADORES E WEBHOOKS BLINDADOS (ANTI-RACE CONDITION) ---
+# --- 7. INTERCEPTADORES E WEBHOOKS BLINDADOS ---
 if "status" in st.query_params and "external_reference" in st.query_params:
     status_pagamento = st.query_params.get("status")
     email_pagador = st.query_params.get("external_reference")
@@ -335,12 +335,35 @@ elif not st.session_state.logged_in and "code" in st.query_params:
             st.query_params.clear()
             st.rerun()
 
-# --- 8. UX CSS PREMIUM E INJEÇÃO DO ÍCONE APPLE ---
+# --- 8. INJEÇÃO DE PWA, MANIFEST E SPLASH SCREEN NATIVO ---
+# Criação do Manifest Dinâmico
+manifest_dict = {
+    "name": "NutryAi PRO",
+    "short_name": "NutryAi",
+    "description": "Sua Inteligência Nutricional",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#F5F5F7",
+    "theme_color": "#34C759",
+    "icons": [
+        {"src": "https://emojicdn.elk.sh/1f34f", "sizes": "192x192", "type": "image/png"},
+        {"src": "https://emojicdn.elk.sh/1f34f", "sizes": "512x512", "type": "image/png"}
+    ]
+}
+manifest_json = json.dumps(manifest_dict)
+manifest_b64 = base64.b64encode(manifest_json.encode()).decode("utf-8")
+
+# Criação da Splash Screen em SVG
+splash_svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1170 2532" style="background-color:#F5F5F7;"><text x="50%" y="45%" font-size="200" text-anchor="middle" dominant-baseline="middle">🍏</text><text x="50%" y="55%" font-family="-apple-system, sans-serif" font-size="100" font-weight="900" fill="#1C1C1E" text-anchor="middle" dominant-baseline="middle">NutryAi</text></svg>"""
+splash_b64 = base64.b64encode(splash_svg.encode()).decode("utf-8")
+
 st.markdown(f"""
-    <link rel="apple-touch-icon" href="https://emojicdn.elk.sh/1f34f">
+    <link rel="manifest" href="data:application/json;base64,{manifest_b64}">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#FFFFFF">
+    <meta name="apple-mobile-web-app-title" content="NutryAi">
+    <link rel="apple-touch-icon" href="https://emojicdn.elk.sh/1f34f">
+    <link rel="apple-touch-startup-image" media="screen" href="data:image/svg+xml;base64,{splash_b64}">
     
     <style>
     :root {{ --bg-color: #F5F5F7; --card-bg: #FFFFFF; --border-color: #E5E5EA; --input-border: #C7C7CC; --input-bg: #FAFAFA; --text-primary: #1C1C1E; --text-secondary: #8E8E93; --shadow-color: rgba(0, 0, 0, 0.04); --accent-color: #34C759; --accent-gradient: linear-gradient(135deg, #34C759 0%, #32D74B 100%); }}
@@ -494,7 +517,7 @@ else:
                         salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
             except: pass
             
-    # --- 🚨 DADOS GLOBAIS DE BIOMETRIA (O HOTFIX) 🚨 ---
+    # --- 🚨 DADOS GLOBAIS DE BIOMETRIA 🚨 ---
     p_idade = safe_int(perfil_seguro.get("idade"), 30)
     p_peso = safe_float(perfil_seguro.get("peso"), 70.0)
     p_altura = safe_int(perfil_seguro.get("altura"), 170)
@@ -503,7 +526,6 @@ else:
     foto_salva = perfil_seguro.get("foto")
     streak_atual = safe_int(perfil_seguro.get("streak"), 1)
     
-    # Esta variável é vital para a IA funcionar!
     dados_perfil_ia = f"{p_idade} anos, {p_peso}kg, {p_altura}cm. Objetivo: {p_obj}. Ativ: {p_atv}."
     
     onboarding_pronto = perfil_seguro.get("onboarding_concluido", False)
@@ -649,7 +671,7 @@ else:
                 with st.expander("📱 Como Instalar o App no Celular"):
                     st.markdown("""
                     **🍎 iPhone (Safari):**
-                    1. Toque no ícone de **Compartilhar**.
+                    1. Toque no ícone de **Compartilhar** no rodapé.
                     2. Selecione **"Adicionar à Tela de Início"**.
                     3. Confirme em **"Adicionar"**.
 
