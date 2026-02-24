@@ -335,7 +335,7 @@ elif not st.session_state.logged_in and "code" in st.query_params:
             st.query_params.clear()
             st.rerun()
 
-# --- 8. INJEÇÃO DE PWA, MANIFEST E SPLASH SCREEN NATIVO ---
+# --- 8. INJEÇÃO DE PWA E UX CSS PREMIUM (NUKE 3.0) ---
 manifest_dict = {
     "name": "NutryAi PRO",
     "short_name": "NutryAi",
@@ -367,14 +367,19 @@ st.markdown(f"""
     :root {{ --bg-color: #F5F5F7; --card-bg: #FFFFFF; --border-color: #E5E5EA; --input-border: #C7C7CC; --input-bg: #FAFAFA; --text-primary: #1C1C1E; --text-secondary: #8E8E93; --shadow-color: rgba(0, 0, 0, 0.04); --accent-color: #34C759; --accent-gradient: linear-gradient(135deg, #34C759 0%, #32D74B 100%); }}
     @media (prefers-color-scheme: dark) {{ :root {{ --bg-color: #000000; --card-bg: #1C1C1E; --border-color: #2C2C2E; --input-border: #48484A; --input-bg: #2C2C2E; --text-primary: #F2F2F7; --text-secondary: #8E8E93; --shadow-color: rgba(0, 0, 0, 0.5); --accent-color: #30D158; --accent-gradient: linear-gradient(135deg, #30D158 0%, #28CD41 100%); }} }}
     
-    /* 🚨 DESTRUIÇÃO TOTAL DE QUALQUER BARRA DO STREAMLIT 🚨 */
+    /* 🚨 NUKE 3.0: DESTRUIÇÃO TOTAL DE QUALQUER BARRA DO STREAMLIT E BOTÃO CLOUD 🚨 */
     html, body, [data-testid="stApp"] {{ background-color: var(--bg-color) !important; margin: 0 !important; padding: 0 !important; }}
     header, [data-testid="stHeader"], .stAppHeader {{ display: none !important; visibility: hidden !important; height: 0px !important; }}
     footer, [data-testid="stFooter"] {{ display: none !important; }}
-    [data-testid="stToolbar"], [data-testid="stDecoration"], .stDeployButton, [data-testid="stAppDeployButton"], [data-testid="manage-app-button"] {{ display: none !important; }}
+    [data-testid="stToolbar"], [data-testid="stDecoration"], .stDeployButton, [data-testid="stAppDeployButton"] {{ display: none !important; }}
     #MainMenu, [data-testid="stSidebar"], [data-testid="collapsedControl"] {{ display: none !important; }} 
-    [data-testid="stBottomBlockContainer"], [data-testid="stBottom"] {{ display: none !important; }}
-    .viewerBadge_container__1QSob {{ display: none !important; }}
+    
+    /* MATA A MARGEM BRANCA E O CONTAINER INFERIOR */
+    [data-testid="stBottomBlockContainer"], [data-testid="stBottom"] {{ display: none !important; visibility: hidden !important; height: 0px !important; opacity: 0 !important; }}
+    .stApp > div:last-child {{ display: none !important; }}
+    
+    /* 🚨 MATA O BOTÃO MANAGE APP (STREAMLIT CLOUD) 🚨 */
+    .viewerBadge_container__1QSob, [class^="viewerBadge_"], [class*="manage-app-button"], #manage-app-button, iframe[src*="manage"] {{ display: none !important; visibility: hidden !important; opacity: 0 !important; width: 0 !important; height: 0 !important; pointer-events: none !important; }}
     
     .block-container {{ padding-top: 1rem !important; padding-bottom: 2rem !important; max-width: 600px !important; margin: 0 auto !important; }}
     
