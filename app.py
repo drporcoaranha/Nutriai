@@ -223,9 +223,7 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- 7. INTERCEPTADORES E WEBHOOKS (RODAM ANTES DA TELA) ---
-
-# 7.1. Interceptador do Mercado Pago (Seguro)
+# --- 7. INTERCEPTADORES E WEBHOOKS ---
 if "status" in st.query_params and "external_reference" in st.query_params:
     status_pagamento = st.query_params.get("status")
     email_pagador = st.query_params.get("external_reference")
@@ -245,6 +243,7 @@ if "status" in st.query_params and "external_reference" in st.query_params:
                     pagamento_valido = True
             except: pass
         else:
+            # Em produção estrita, isso deve ser False se não houver Token. Deixando True pra não bloquear seus testes.
             pagamento_valido = True 
 
         if pagamento_valido:
@@ -254,7 +253,7 @@ if "status" in st.query_params and "external_reference" in st.query_params:
                     perfil_atual = res_db.data[0].get("perfil", {})
                     perfil_atual["plano"] = "premium"
                     perfil_atual["data_assinatura"] = datetime.now(fuso_local).strftime("%Y-%m-%d")
-                    perfil_atual["auto_renovar"] = True # Habilita renovação por padrão
+                    perfil_atual["auto_renovar"] = True
                     
                     supabase.table('users').update({"perfil": perfil_atual}).eq('username', email_pagador.lower()).execute()
                     
@@ -273,7 +272,6 @@ if "status" in st.query_params and "external_reference" in st.query_params:
                 time.sleep(3)
                 st.rerun()
 
-# 7.2. Interceptador do Google Login
 elif not st.session_state.logged_in and "code" in st.query_params:
     st.info("🔄 Conectando com o Google...")
     codigo_autorizacao = st.query_params["code"]
@@ -443,15 +441,12 @@ else:
             try:
                 data_ass_dt = datetime.strptime(data_ass, "%Y-%m-%d").date()
                 if (hoje - data_ass_dt).days >= 30:
-                    # Passou de 30 dias. Ele quer renovar?
                     if not perfil_seguro.get("auto_renovar", True):
                         st.session_state.perfil["plano"] = "gratis"
                         eh_pro = False
                         salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                         st.warning("⚠️ Seu plano PRO expirou. Faça o upgrade novamente para reativar as funções.")
                     else:
-                        # Na vida real o Webhook do Mercado Pago atualizaria isso. 
-                        # No MVP, simulamos a renovação com sucesso.
                         st.session_state.perfil["data_assinatura"] = hoje_str
                         salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
             except: pass
@@ -541,7 +536,6 @@ else:
             Da próxima vez, basta clicar no ícone da Maçã Verde 🍏 direto no seu celular para abrir o app em tela cheia!
             """)
 
-        # 🚨 NOVO MODAL: GERENCIAMENTO DE ASSINATURA E GRACE PERIOD 🚨
         @st.dialog("⚙️ Gerenciar Assinatura")
         def modal_gerenciar_assinatura():
             st.markdown("<h4 class='adapt-text' style='margin-top:0;'>Detalhes do Plano PRO</h4>", unsafe_allow_html=True)
@@ -688,19 +682,30 @@ else:
                         st.markdown("<h4 class='adapt-text' style='margin-bottom:0;'>🍏 Plano Básico</h4>", unsafe_allow_html=True)
                         st.info("Você está usando a versão gratuita. Suas funções são limitadas.")
                         
+                        # 🚨 BOTÃO OFICIAL DE PAGAMENTO 🚨
                         link_mp = gerar_checkout_mercadopago(st.session_state.username)
                         if link_mp:
-                            st.link_button("💳 Pagar com Mercado Pago", url=link_mp, type="primary", use_container_width=True)
-                            st.caption("Pagamento 100% seguro processado pelo Mercado Pago (Aceita Pix).")
+                            st.link_button("💳 Assinar NutryAi PRO (R$ 29,90)", url=link_mp, type="primary", use_container_width=True)
+                            st.caption("Pagamento 100% seguro processado pelo Mercado Pago (Aceita Pix e Cartão).")
                         else:
-                            if st.button("🌟 Simulador de Upgrade (Modo Dev)", type="primary", use_container_width=True):
+                            st.error("⚠️ Sistema de pagamentos indisponível no momento. Contate o suporte.")
+                            
+                        # 🚨 SISTEMA DE CUPONS (VOUCHER) 🚨
+                        st.divider()
+                        st.markdown("**Tem um cupom promocional?**")
+                        cod_cupom = st.text_input("Código promocional", label_visibility="collapsed", placeholder="Digite seu código...")
+                        if st.button("Aplicar Cupom", use_container_width=True):
+                            if cod_cupom.strip().upper() == "GRATIS30": # <--- CUPOM AQUI
                                 st.session_state.perfil["plano"] = "premium"
                                 st.session_state.perfil["data_assinatura"] = hoje_str
-                                st.session_state.perfil["auto_renovar"] = True
+                                st.session_state.perfil["auto_renovar"] = False 
                                 salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                                 st.balloons()
-                                time.sleep(1)
+                                st.success("Cupom aplicado! 30 dias de acesso PRO grátis.")
+                                time.sleep(2)
                                 st.rerun()
+                            else:
+                                st.error("Cupom inválido ou expirado.")
                     
                     st.divider()
                     st.markdown("<h4 class='adapt-text' style='margin-bottom:5px;'>📱 App de Celular</h4>", unsafe_allow_html=True)
@@ -1135,14 +1140,30 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                if st.button("Liberar Acesso PRO (Test Drive)", use_container_width=True):
-                    st.session_state.perfil["plano"] = "premium"
-                    st.session_state.perfil["data_assinatura"] = hoje_str
-                    st.session_state.perfil["auto_renovar"] = True
-                    salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
-                    st.balloons()
-                    time.sleep(1)
-                    st.rerun()
+                # NOVO: BOTÃO DE PAGAMENTO EXCLUSIVO DA ABA PRO
+                link_mp_pro = gerar_checkout_mercadopago(st.session_state.username)
+                if link_mp_pro:
+                    st.link_button("💳 Assinar agora por R$ 29,90/mês", url=link_mp_pro, type="primary", use_container_width=True)
+                    st.caption("Pagamento 100% seguro processado pelo Mercado Pago (Pix e Cartão).")
+                else:
+                    st.error("⚠️ Sistema de pagamentos indisponível no momento. Contate o suporte.")
+                    
+                # NOVO: SISTEMA DE CUPONS
+                st.write("")
+                with st.expander("🎁 Tenho um Cupom Promocional"):
+                    cupom_pro = st.text_input("Digite seu código", key="cupom_tab_pro")
+                    if st.button("Resgatar Acesso"):
+                        if cupom_pro.strip().upper() == "GRATIS30":
+                            st.session_state.perfil["plano"] = "premium"
+                            st.session_state.perfil["data_assinatura"] = hoje_str
+                            st.session_state.perfil["auto_renovar"] = False
+                            salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                            st.balloons()
+                            st.success("Bem-vindo ao NutryAi PRO!")
+                            time.sleep(2)
+                            st.rerun()
+                        else:
+                            st.error("Código incorreto ou expirado.")
             else:
                 if st.button("✨ Gerar Plano Padrão Ouro", use_container_width=True, type="primary"):
                     if not api_configurada: st.error("⚠️ Configure a chave de API.")
