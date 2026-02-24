@@ -224,13 +224,17 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- 7. INTERCEPTADORES E WEBHOOKS BLINDADOS ---
+# --- 7. INTERCEPTADORES E WEBHOOKS BLINDADOS (ANTI-RACE CONDITION) ---
 if "status" in st.query_params and "external_reference" in st.query_params:
     status_pagamento = st.query_params.get("status")
     email_pagador = st.query_params.get("external_reference")
     payment_id = st.query_params.get("payment_id")
     
-    if status_pagamento == "approved" and email_pagador:
+    # TRAVA ANTI-DUPLICAÇÃO MERCADO PAGO
+    if st.session_state.get("ultimo_pagamento_id") == payment_id:
+        st.query_params.clear()
+    elif status_pagamento == "approved" and email_pagador:
+        st.session_state["ultimo_pagamento_id"] = payment_id
         ph = st.empty()
         ph.info("🔄 Validando seu pagamento com o Mercado Pago...")
         pagamento_valido = False
@@ -277,54 +281,61 @@ if "status" in st.query_params and "external_reference" in st.query_params:
             st.rerun()
 
 elif not st.session_state.logged_in and "code" in st.query_params:
-    ph_g = st.empty()
-    ph_g.info("🔄 Conectando com o Google...")
     codigo_autorizacao = st.query_params["code"]
     
-    try:
-        token_url = "https://oauth2.googleapis.com/token"
-        token_data = {"code": codigo_autorizacao, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "redirect_uri": REDIRECT_URI, "grant_type": "authorization_code"}
-        res = requests.post(token_url, data=token_data)
+    # 🚨 TRAVA ANTI-DUPLICAÇÃO GOOGLE (O SEGREDO DA ESTABILIDADE) 🚨
+    if st.session_state.get("ultimo_codigo_google") == codigo_autorizacao:
+        st.query_params.clear()
+    else:
+        st.session_state["ultimo_codigo_google"] = codigo_autorizacao
         
-        if res.status_code == 200:
-            access_token = res.json().get("access_token")
-            user_res = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
+        ph_g = st.empty()
+        ph_g.info("🔄 Conectando com o Google...")
+        
+        try:
+            token_url = "https://oauth2.googleapis.com/token"
+            token_data = {"code": codigo_autorizacao, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "redirect_uri": REDIRECT_URI, "grant_type": "authorization_code"}
+            res = requests.post(token_url, data=token_data)
             
-            if user_res.status_code == 200:
-                google_user = user_res.json()
-                username_google = google_user.get("email") 
-                nome_google = google_user.get("given_name", "Usuário") 
+            if res.status_code == 200:
+                access_token = res.json().get("access_token")
+                user_res = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {access_token}"})
                 
-                res_db = supabase.table('users').select('*').eq('username', username_google).execute()
-                if len(res_db.data) == 0:
-                    criar_conta(username_google, nome_google, "google_sso_senha_dummy")
+                if user_res.status_code == 200:
+                    google_user = user_res.json()
+                    username_google = google_user.get("email") 
+                    nome_google = google_user.get("given_name", "Usuário") 
+                    
                     res_db = supabase.table('users').select('*').eq('username', username_google).execute()
-                
-                user_db = res_db.data[0]
-                st.session_state.logged_in = True
-                st.session_state.username = username_google
-                st.session_state.nome_usuario = user_db.get('nome', 'Usuário')
-                st.session_state.perfil = user_db.get("perfil") if isinstance(user_db.get("perfil"), dict) else {}
-                st.session_state.despensa = carregar_despensa(username_google)
-                
-                ph_g.empty()
-                st.query_params.clear() 
-                st.rerun() 
+                    if len(res_db.data) == 0:
+                        criar_conta(username_google, nome_google, "google_sso_senha_dummy")
+                        res_db = supabase.table('users').select('*').eq('username', username_google).execute()
+                    
+                    user_db = res_db.data[0]
+                    st.session_state.logged_in = True
+                    st.session_state.username = username_google
+                    st.session_state.nome_usuario = user_db.get('nome', 'Usuário')
+                    st.session_state.perfil = user_db.get("perfil") if isinstance(user_db.get("perfil"), dict) else {}
+                    st.session_state.despensa = carregar_despensa(username_google)
+                    
+                    ph_g.empty()
+                    st.query_params.clear() 
+                    st.rerun() 
+                else:
+                    ph_g.error("Falha ao ler o perfil do Google.")
+                    time.sleep(2)
+                    st.query_params.clear()
+                    st.rerun()
             else:
-                ph_g.error("Falha ao ler o perfil do Google.")
-                time.sleep(2)
+                ph_g.error("Aguarde, concluindo login...")
+                time.sleep(1)
                 st.query_params.clear()
                 st.rerun()
-        else:
-            ph_g.error("Código do Google expirado ou inválido. Tente novamente.")
+        except Exception as e: 
+            ph_g.error("Falha na conexão com os servidores do Google.")
             time.sleep(2)
             st.query_params.clear()
             st.rerun()
-    except Exception as e: 
-        ph_g.error("Falha na conexão com os servidores do Google.")
-        time.sleep(2)
-        st.query_params.clear()
-        st.rerun()
 
 # --- 8. UX CSS PREMIUM E INJEÇÃO DO ÍCONE APPLE ---
 st.markdown(f"""
@@ -463,7 +474,6 @@ if not st.session_state.logged_in:
 else:
     perfil_seguro = st.session_state.perfil if isinstance(st.session_state.perfil, dict) else {}
     
-    # --- 🚨 VERIFICAÇÃO AUTOMÁTICA DE VENCIMENTO DO PLANO PRO 🚨 ---
     hoje = datetime.now(fuso_local).date()
     hoje_str = hoje.strftime("%Y-%m-%d")
     
@@ -540,7 +550,6 @@ else:
                 novo_nome = st.text_input("Seu Nome", value=st.session_state.nome_usuario)
                 nova_idade = st.number_input("Idade", value=m_idade)
                 
-                # 🚨 NOVO: ZONA DE PERIGO (EXCLUIR CONTA) 🚨
                 st.markdown("<h4 class='adapt-text' style='color: #FF3B30; font-size: 0.9rem; margin-top: 20px; margin-bottom: 5px;'>🚨 Zona de Perigo</h4>", unsafe_allow_html=True)
                 with st.expander("Excluir minha conta permanentemente"):
                     st.warning("Esta ação apagará todos os seus dados, histórico e despensa. Não pode ser desfeita.")
@@ -661,7 +670,6 @@ else:
             if c2.button("🚪 Sair", use_container_width=True): 
                 fazer_logout()
 
-        # Funções das outras modais
         @st.dialog("➕ Adicionar Alimento")
         def modal_adicionar():
             n_nome = st.text_input("Qual o alimento?")
@@ -742,7 +750,6 @@ else:
         elif hora_atual < 18: saudacao = "Boa tarde"
         else: saudacao = "Boa noite"
 
-        # CABEÇALHO DO APLICATIVO
         col_text, col_profile = st.columns([3, 1], vertical_alignment="center")
         with col_text:
             badge_html = "<span style='background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: black; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;'>PRO</span>" if eh_pro else ""
