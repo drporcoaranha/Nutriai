@@ -223,7 +223,7 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- 7. INTERCEPTADORES E WEBHOOKS ---
+# --- 7. INTERCEPTADORES E WEBHOOKS BLINDADOS ---
 if "status" in st.query_params and "external_reference" in st.query_params:
     status_pagamento = st.query_params.get("status")
     email_pagador = st.query_params.get("external_reference")
@@ -506,7 +506,7 @@ else:
                 st.rerun()
                 
     else:
-        # 🚨 NOVO MODAL DE AJUSTES ABSOLUTO 🚨
+        # 🚨 MODAL DE AJUSTES ABSOLUTO 🚨
         @st.dialog("⚙️ Configurações da Conta")
         def modal_ajustes():
             p_s = st.session_state.perfil if isinstance(st.session_state.perfil, dict) else {}
@@ -562,12 +562,13 @@ else:
                         st.write(f"**Renovação Automática:** {'✅ Ativada' if auto_renovar else '❌ Desativada'}")
                         
                         st.divider()
-                        if st.button("💳 Alterar Forma de Pagamento", use_container_width=True):
-                            st.info("No ambiente real, este botão enviará você ao Portal do Cliente do Mercado Pago.")
+                        
+                        # 🚨 LINK OFICIAL DO MERCADO PAGO 🚨
+                        st.link_button("💳 Gerenciar no Mercado Pago", "https://www.mercadopago.com.br/subscriptions", use_container_width=True)
                         
                         st.write("")
                         if auto_renovar:
-                            if st.button("🚨 Cancelar Assinatura", use_container_width=True):
+                            if st.button("🚨 Cancelar Assinatura Interna", use_container_width=True):
                                 st.session_state.perfil["auto_renovar"] = False
                                 salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                                 st.rerun()
@@ -729,7 +730,6 @@ else:
             """, unsafe_allow_html=True)
             
         with col_profile:
-            # 🚨 O BOTÃO AGORA ABRE A JANELA MODAL PERFEITA 🚨
             if st.button("⚙️ Ajustes", use_container_width=True):
                 modal_ajustes()
 
