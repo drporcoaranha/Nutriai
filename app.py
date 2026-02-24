@@ -29,13 +29,15 @@ fuso_local = timezone(timedelta(hours=-3))
 if cookies_enabled:
     cookie_controller = CookieController()
 
-# --- 2. CONEXÃO COM O SUPABASE ---
+# --- 2. CONEXÃO COM O SUPABASE E MERCADO PAGO ---
 try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 except KeyError:
     st.error("⚠️ Chaves do Supabase não encontradas no st.secrets!")
     st.stop()
+
+MERCADOPAGO_ACCESS_TOKEN = st.secrets.get("MERCADOPAGO_ACCESS_TOKEN", "")
 
 @st.cache_resource
 def init_connection():
@@ -46,6 +48,45 @@ try:
 except Exception as e:
     st.error(f"Erro ao conectar com o Banco de Dados: {e}")
     st.stop()
+
+# --- INTEGRAÇÃO MERCADO PAGO ---
+def gerar_checkout_mercadopago(email_usuario):
+    if not MERCADOPAGO_ACCESS_TOKEN: return None
+    
+    url = "https://api.mercadopago.com/checkout/preferences"
+    headers = {
+        "Authorization": f"Bearer {MERCADOPAGO_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    # Payload para criação de um Checkout Pro Dinâmico
+    payload = {
+        "items": [
+            {
+                "title": "NutryAi PRO - Plano Mensal",
+                "description": "Acesso total à Inteligência Artificial Nutricional",
+                "quantity": 1,
+                "currency_id": "BRL",
+                "unit_price": 29.90
+            }
+        ],
+        "payer": {
+            "email": email_usuario
+        },
+        "back_urls": {
+            "success": REDIRECT_URI, # Volta pro app se pagar
+            "failure": REDIRECT_URI,
+            "pending": REDIRECT_URI
+        },
+        "auto_return": "approved",
+        "external_reference": email_usuario # Identificador para o seu banco de dados no futuro
+    }
+    
+    try:
+        res = requests.post(url, json=payload, headers=headers)
+        if res.status_code in [200, 201]:
+            return res.json().get("init_point") # URL do Checkout Oficial
+    except Exception as e: pass
+    return None
 
 # --- 3. CONFIGURAÇÕES DO GOOGLE LOGIN ---
 GOOGLE_CLIENT_ID = st.secrets.get("GOOGLE_CLIENT_ID", "")
@@ -269,9 +310,9 @@ if not st.session_state.logged_in:
     
     @st.dialog("✨ Criar Nova Conta")
     def modal_registo():
-        st.markdown("<p style='text-align: center; color: var(--text-secondary); margin-top:-10px; margin-bottom:20px;'>Preencha os seus dados para iniciar a jornada.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: var(--text-secondary); margin-top:-10px; margin-bottom:20px;'>Preencha seus dados para iniciar a jornada.</p>", unsafe_allow_html=True)
         cad_nome = st.text_input("Como quer ser chamado?")
-        cad_email = st.text_input("O seu E-mail (será o seu login)").lower()
+        cad_email = st.text_input("Seu E-mail (será o seu login)").lower()
         cad_senha = st.text_input("Crie uma senha segura", type="password")
         
         st.write("")
@@ -294,7 +335,7 @@ if not st.session_state.logged_in:
                 <div class="brand-container">
                     <div class="brand-icon-box"><span class="brand-icon">🍏</span></div>
                     <h1 class="brand-text">NutryAi</h1>
-                    <p class="sub-text" style="margin-top: 8px;">A sua inteligência nutricional.</p>
+                    <p class="sub-text" style="margin-top: 8px;">Sua inteligência nutricional.</p>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -304,8 +345,8 @@ if not st.session_state.logged_in:
 
             with st.container(border=True):
                 st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse sua conta</h4>", unsafe_allow_html=True)
-                login_user = st.text_input("E-mail", placeholder="ex: o_seu@email.com", label_visibility="collapsed").lower()
-                login_senha = st.text_input("Senha", type="password", placeholder="A sua senha secreta", label_visibility="collapsed")
+                login_user = st.text_input("E-mail", placeholder="ex: seu@email.com", label_visibility="collapsed").lower()
+                login_senha = st.text_input("Senha", type="password", placeholder="Sua senha secreta", label_visibility="collapsed")
                 
                 st.write("")
                 if st.button("Entrar no App", use_container_width=True, type="primary"):
@@ -409,7 +450,7 @@ else:
                     salvar_despensa(st.session_state.despensa, st.session_state.username)
                     st.rerun() 
             else: 
-                st.write("O seu estoque já está vazio.")
+                st.write("Seu estoque já está vazio.")
                 
         @st.dialog("📱 Como Instalar o App")
         def modal_instalar_app():
@@ -462,7 +503,6 @@ else:
             st.session_state.perfil["streak"] = streak_atual
             salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
 
-        # 🚨 CÁLCULOS GLOBAIS DE ÁGUA 🚨
         agua_memoria = perfil_seguro.get("agua_diaria", {})
         if agua_memoria.get("data") != hoje_str:
             agua_memoria = {"data": hoje_str, "copos": 0}
@@ -515,7 +555,7 @@ else:
                 with tab_plan:
                     if eh_pro:
                         st.markdown("<h4 class='adapt-text' style='margin-bottom:0;'>👑 NutryAi PRO</h4>", unsafe_allow_html=True)
-                        st.success("A sua assinatura está ativa e funcionando perfeitamente.")
+                        st.success("Sua assinatura está ativa e funcionando perfeitamente.")
                         
                         data_ass = perfil_seguro.get("data_assinatura")
                         if not data_ass:
@@ -528,19 +568,26 @@ else:
                             vencimento = "Data não disponível"
                             
                         st.markdown(f"**Próxima Renovação:** {vencimento}")
-                        st.markdown("**Status:** Renovação Automática (Stripe)")
+                        st.markdown("**Status:** Renovação Automática (Mercado Pago)")
                         if st.button("Gerenciar Assinatura", use_container_width=True):
-                            st.toast("O painel da Stripe será conectado aqui em breve.")
+                            st.toast("Painel de assinaturas em breve.")
                     else:
                         st.markdown("<h4 class='adapt-text' style='margin-bottom:0;'>🍏 Plano Básico</h4>", unsafe_allow_html=True)
                         st.info("Você está usando a versão gratuita. Suas funções são limitadas.")
-                        if st.button("🌟 Fazer Upgrade", type="primary", use_container_width=True):
-                            st.session_state.perfil["plano"] = "premium"
-                            st.session_state.perfil["data_assinatura"] = hoje_str
-                            salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
-                            st.balloons()
-                            time.sleep(1)
-                            st.rerun()
+                        
+                        # INTEGRAÇÃO DO MERCADO PAGO AQUI
+                        link_mp = gerar_checkout_mercadopago(st.session_state.username)
+                        if link_mp:
+                            st.link_button("💳 Pagar com Mercado Pago", url=link_mp, type="primary", use_container_width=True)
+                            st.caption("Pagamento 100% seguro processado pelo Mercado Pago (Aceita Pix).")
+                        else:
+                            if st.button("🌟 Simulador de Upgrade (Modo Dev)", type="primary", use_container_width=True):
+                                st.session_state.perfil["plano"] = "premium"
+                                st.session_state.perfil["data_assinatura"] = hoje_str
+                                salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                                st.balloons()
+                                time.sleep(1)
+                                st.rerun()
                     
                     st.divider()
                     st.markdown("<h4 class='adapt-text' style='margin-bottom:5px;'>📱 App de Celular</h4>", unsafe_allow_html=True)
@@ -566,13 +613,11 @@ else:
                 st.divider()
                 if st.button("🚪 Sair da Conta", use_container_width=True): fazer_logout()
 
-        # 🚨 ADIÇÃO DA ABA HOME (🏠) COMO A PRIMEIRA 🚨
         tab_home, tab_rotina, tab_estoque, tab_plano, tab_agua, tab_grafico, tab_pro, tab_chat = st.tabs(["🏠", "🕒", "📦", "🍽️", "💧", "📈", "👑", "💬"])
 
         with tab_home:
             st.markdown("<h3 class='adapt-text' style='font-weight: 700; margin-bottom: 20px;'>🏠 Resumo do Dia</h3>", unsafe_allow_html=True)
             
-            # Painel do Cardápio
             with st.container(border=True):
                 st.markdown("<h4 class='adapt-text' style='margin-bottom: 5px;'>🍽️ Seu Menu</h4>", unsafe_allow_html=True)
                 if st.session_state.cardapio_atual:
@@ -588,9 +633,8 @@ else:
                         else:
                             st.info(f"Progresso: {comidas} de {total_ref} refeições. Continue firme na aba 🍽️!")
                 else:
-                    st.write("Vá até a aba de **Plano Alimentar (🍽️)** para gerar o seu cardápio personalizado com o que você tem na despensa hoje.")
+                    st.write("Vá até a aba de **Plano Alimentar (🍽️)** para gerar seu cardápio personalizado com o que você tem na despensa hoje.")
             
-            # Cards de Água e Ofensiva Lado a Lado
             c_agua, c_streak = st.columns(2)
             with c_agua:
                 with st.container(border=True):
@@ -602,7 +646,6 @@ else:
                     st.markdown("<h4 style='text-align: center; margin-bottom: 5px; color: var(--text-primary);'>🔥 Ofensiva</h4>", unsafe_allow_html=True)
                     st.markdown(f"<h2 style='text-align: center; color: #FF9500; margin-top: 0;'>{streak_atual} <span style='font-size: 1rem; color: var(--text-secondary);'>dias</span></h2>", unsafe_allow_html=True)
 
-            # Dica Rotativa da Nutri
             dicas = [
                 "Beba um copo de água logo ao acordar para despertar o seu metabolismo.",
                 "As fibras ajudam na saciedade. Inclua aveia ou frutas com casca nos lanches!",
@@ -781,7 +824,7 @@ else:
                     if not tem_estoque:
                         with st.container(border=True):
                             st.markdown("<h4 class='adapt-text'>✨ 2. Sua despensa parece estar vazia!</h4>", unsafe_allow_html=True)
-                            st.write("Para que a IA crie um cardápio perfeito e sem desperdícios, adicione o que tem na geladeira agora:")
+                            st.write("Para que a IA crie um cardápio perfeito e sem desperdícios, adicione o que você tem na geladeira agora:")
                             n_nome = st.text_input("🛒 O que tem na geladeira?", key="fast_alimento", placeholder="Ex: Ovos, Frango, Aveia...")
                             n_qtd = st.number_input("Quantidade", min_value=1.0, step=1.0, key="fast_qtd")
                             if st.button("➕ Salvar na Despensa", type="primary", use_container_width=True):
