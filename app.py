@@ -223,8 +223,7 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- 7. INTERCEPTADORES E WEBHOOKS BLINDADOS ---
-# 7.1. Interceptador do Mercado Pago
+# --- 7. INTERCEPTADORES E WEBHOOKS ---
 if "status" in st.query_params and "external_reference" in st.query_params:
     status_pagamento = st.query_params.get("status")
     email_pagador = st.query_params.get("external_reference")
@@ -265,7 +264,6 @@ if "status" in st.query_params and "external_reference" in st.query_params:
                     st.success("🎉 Pagamento Aprovado! Bem-vindo ao NutryAi PRO.")
                     time.sleep(3)
                     
-                    # 🚨 SÓ LIMPA A URL DEPOIS DE SALVAR TUDO 🚨
                     st.query_params.clear()
                     st.rerun()
             except Exception as e: 
@@ -277,7 +275,6 @@ if "status" in st.query_params and "external_reference" in st.query_params:
             st.query_params.clear()
             st.rerun()
 
-# 7.2. Interceptador do Google Login Blindado
 elif not st.session_state.logged_in and "code" in st.query_params:
     ph_g = st.empty()
     ph_g.info("🔄 Conectando com o Google...")
@@ -310,7 +307,6 @@ elif not st.session_state.logged_in and "code" in st.query_params:
                 st.session_state.despensa = carregar_despensa(username_google)
                 
                 ph_g.empty()
-                # 🚨 SÓ LIMPA A URL DEPOIS DE ESTAR LOGADO 🚨
                 st.query_params.clear() 
                 st.rerun() 
             else:
@@ -405,52 +401,51 @@ if not st.session_state.logged_in:
             else:
                 st.warning("Preencha todos os campos.")
 
-    if "code" not in st.query_params:
-        with st.container():
-            st.markdown("""
-                <div class="brand-container">
-                    <div class="brand-icon-box"><span class="brand-icon">🍏</span></div>
-                    <h1 class="brand-text">NutryAi</h1>
-                    <p class="sub-text" style="margin-top: 8px;">Sua inteligência nutricional.</p>
-                </div>
-            """, unsafe_allow_html=True)
+    with st.container():
+        st.markdown("""
+            <div class="brand-container">
+                <div class="brand-icon-box"><span class="brand-icon">🍏</span></div>
+                <h1 class="brand-text">NutryAi</h1>
+                <p class="sub-text" style="margin-top: 8px;">Sua inteligência nutricional.</p>
+            </div>
+        """, unsafe_allow_html=True)
 
-            if st.session_state.cadastro_sucesso:
-                st.success("✅ Conta criada com sucesso! Faça login abaixo para iniciar.")
-                st.session_state.cadastro_sucesso = False
+        if st.session_state.cadastro_sucesso:
+            st.success("✅ Conta criada com sucesso! Faça login abaixo para iniciar.")
+            st.session_state.cadastro_sucesso = False
 
-            with st.container(border=True):
-                st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse sua conta</h4>", unsafe_allow_html=True)
-                login_user = st.text_input("E-mail", placeholder="ex: seu@email.com", label_visibility="collapsed").lower()
-                login_senha = st.text_input("Senha", type="password", placeholder="Sua senha secreta", label_visibility="collapsed")
-                
-                st.write("")
-                if st.button("Entrar no App", use_container_width=True, type="primary"):
-                    if login_user and login_senha:
-                        with st.spinner("🔄 Conectando aos servidores seguros..."):
-                            dados_usuario = validar_login(login_user, login_senha)
-                            
-                            if dados_usuario == "google_only":
-                                st.warning("🔗 Conta Google detectada! Faça login com o botão abaixo ou crie uma senha em 'Criar Nova Conta' para acessar manualmente.")
-                            elif dados_usuario:
-                                st.session_state.logged_in = True
-                                st.session_state.username = login_user
-                                st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
-                                perfil_carregado = dados_usuario.get("perfil")
-                                st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
-                                st.session_state.despensa = carregar_despensa(login_user)
-                                st.rerun()
-                            else: 
-                                st.error("E-mail ou senha incorretos.")
-                    else: st.warning("Preencha todos os campos.")
-                        
-                st.markdown("<div style='text-align: center; margin: 15px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
-                if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
-                
+        with st.container(border=True):
+            st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse sua conta</h4>", unsafe_allow_html=True)
+            login_user = st.text_input("E-mail", placeholder="ex: seu@email.com", label_visibility="collapsed").lower()
+            login_senha = st.text_input("Senha", type="password", placeholder="Sua senha secreta", label_visibility="collapsed")
+            
             st.write("")
-            st.markdown("<hr style='margin: 10px 0; opacity: 0.2'>", unsafe_allow_html=True)
-            if st.button("Não tem conta? Criar Nova Conta", use_container_width=True):
-                modal_registo()
+            if st.button("Entrar no App", use_container_width=True, type="primary"):
+                if login_user and login_senha:
+                    with st.spinner("🔄 Conectando aos servidores seguros..."):
+                        dados_usuario = validar_login(login_user, login_senha)
+                        
+                        if dados_usuario == "google_only":
+                            st.warning("🔗 Conta Google detectada! Faça login com o botão abaixo ou crie uma senha em 'Criar Nova Conta' para acessar manualmente.")
+                        elif dados_usuario:
+                            st.session_state.logged_in = True
+                            st.session_state.username = login_user
+                            st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
+                            perfil_carregado = dados_usuario.get("perfil")
+                            st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
+                            st.session_state.despensa = carregar_despensa(login_user)
+                            st.rerun()
+                        else: 
+                            st.error("E-mail ou senha incorretos.")
+                else: st.warning("Preencha todos os campos.")
+                    
+            st.markdown("<div style='text-align: center; margin: 15px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
+            if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
+            
+        st.write("")
+        st.markdown("<hr style='margin: 10px 0; opacity: 0.2'>", unsafe_allow_html=True)
+        if st.button("Não tem conta? Criar Nova Conta", use_container_width=True):
+            modal_registo()
 
 # ==========================================
 # MÓDULO 2: O APLICATIVO E ONBOARDING
@@ -511,6 +506,137 @@ else:
                 st.rerun()
                 
     else:
+        # 🚨 NOVO MODAL DE AJUSTES ABSOLUTO 🚨
+        @st.dialog("⚙️ Configurações da Conta")
+        def modal_ajustes():
+            p_s = st.session_state.perfil if isinstance(st.session_state.perfil, dict) else {}
+            m_idade = safe_int(p_s.get("idade"), 30)
+            m_peso = safe_float(p_s.get("peso"), 70.0)
+            m_altura = safe_int(p_s.get("altura"), 170)
+            m_obj = str(p_s.get("objetivo") or "Emagrecimento")
+            m_atv = str(p_s.get("atividade") or "Moderada")
+            m_foto = p_s.get("foto")
+            m_eh_pro = str(p_s.get("plano", "gratis")) == "premium"
+            m_hoje_str = datetime.now(fuso_local).strftime("%Y-%m-%d")
+
+            tab_dados, tab_bio, tab_plan = st.tabs(["👤 Dados", "⚖️ Bio", "💳 Plano"])
+            
+            with tab_dados:
+                st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+                if m_foto: st.markdown(f'<img src="data:image/jpeg;base64,{m_foto}" width="80" height="80" style="border-radius:50%; object-fit:cover; margin-bottom:15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">', unsafe_allow_html=True)
+                else: st.markdown('<div style="font-size: 40px; margin-bottom: 15px;">👤</div>', unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+                nova_foto = st.file_uploader("Mudar foto", type=["jpg", "png"], label_visibility="collapsed")
+                novo_nome = st.text_input("Seu Nome", value=st.session_state.nome_usuario)
+                nova_idade = st.number_input("Idade", value=m_idade)
+
+            with tab_bio:
+                novo_peso = st.number_input("Peso (kg)", value=m_peso, step=0.5)
+                novo_altura = st.number_input("Altura (cm)", value=m_altura)
+                objetivos = ["Emagrecimento", "Hipertrofia", "Manutenção", "Controle Glicêmico"]
+                try: idx_obj = objetivos.index(m_obj)
+                except: idx_obj = 0
+                novo_obj = st.selectbox("Objetivo Principal", objetivos, index=idx_obj)
+                atividades = ["Sedentário", "Leve", "Moderada", "Intensa"]
+                try: idx_atv = atividades.index(m_atv)
+                except: idx_atv = 2
+                nova_atv = st.selectbox("Nível de Atividade", atividades, index=idx_atv)
+                
+            with tab_plan:
+                if m_eh_pro:
+                    st.markdown("<h4 class='adapt-text' style='margin-top:0;'>👑 NutryAi PRO</h4>", unsafe_allow_html=True)
+                    data_ass = p_s.get("data_assinatura", m_hoje_str)
+                    try:
+                        data_ass_dt = datetime.strptime(data_ass, "%Y-%m-%d").date()
+                        vencimento_dt = data_ass_dt + timedelta(days=30)
+                        vencimento_str = vencimento_dt.strftime("%d/%m/%Y")
+                        dias_restantes = (vencimento_dt - datetime.now(fuso_local).date()).days
+                    except:
+                        vencimento_str = "Indisponível"
+                        dias_restantes = 0
+                    
+                    auto_renovar = p_s.get("auto_renovar", True)
+                    
+                    with st.container(border=True):
+                        st.write(f"**Vencimento:** {vencimento_str} ({max(0, dias_restantes)} dias)")
+                        st.write(f"**Renovação Automática:** {'✅ Ativada' if auto_renovar else '❌ Desativada'}")
+                        
+                        st.divider()
+                        if st.button("💳 Alterar Forma de Pagamento", use_container_width=True):
+                            st.info("No ambiente real, este botão enviará você ao Portal do Cliente do Mercado Pago.")
+                        
+                        st.write("")
+                        if auto_renovar:
+                            if st.button("🚨 Cancelar Assinatura", use_container_width=True):
+                                st.session_state.perfil["auto_renovar"] = False
+                                salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                                st.rerun()
+                        else:
+                            if st.button("🔄 Reativar Renovação", type="primary", use_container_width=True):
+                                st.session_state.perfil["auto_renovar"] = True
+                                salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                                st.rerun()
+                else:
+                    st.markdown("<h4 class='adapt-text' style='margin-top:0;'>🍏 Plano Básico</h4>", unsafe_allow_html=True)
+                    st.info("Você está usando a versão gratuita. Suas funções são limitadas.")
+                    
+                    link_mp = gerar_checkout_mercadopago(st.session_state.username)
+                    if link_mp:
+                        st.link_button("💳 Assinar NutryAi PRO (R$ 29,90)", url=link_mp, type="primary", use_container_width=True)
+                    else:
+                        st.error("⚠️ Sistema de pagamentos indisponível.")
+                        
+                    st.write("")
+                    with st.expander("🎁 Tem um Cupom Promocional?"):
+                        cod_cupom_ajustes = st.text_input("Código promocional", label_visibility="collapsed", placeholder="Digite seu código...", key="cupom_ajustes_modal")
+                        if st.button("Aplicar Cupom", use_container_width=True, key="btn_cupom_ajustes_modal"):
+                            if cod_cupom_ajustes.strip().upper() == "GRATIS30": 
+                                st.session_state.perfil["plano"] = "premium"
+                                st.session_state.perfil["data_assinatura"] = m_hoje_str
+                                st.session_state.perfil["auto_renovar"] = False 
+                                salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                                st.balloons()
+                                time.sleep(1.5)
+                                st.rerun()
+                            else:
+                                st.error("Cupom inválido ou expirado.")
+                
+                st.write("")
+                with st.expander("📱 Como Instalar o App no Celular"):
+                    st.markdown("""
+                    **🍎 iPhone (Safari):**
+                    1. Toque no ícone de **Compartilhar**.
+                    2. Selecione **"Adicionar à Tela de Início"**.
+                    3. Confirme em **"Adicionar"**.
+
+                    **🤖 Android (Chrome):**
+                    1. Toque nos **3 pontinhos** no topo.
+                    2. Selecione **"Adicionar à tela inicial"**.
+                    3. Confirme.
+                    """)
+            
+            st.write("")
+            c1, c2 = st.columns(2)
+            if c1.button("💾 Salvar Perfil", type="primary", use_container_width=True):
+                if nova_foto:
+                    img = Image.open(nova_foto)
+                    img.thumbnail((200, 200)) 
+                    buffered = BytesIO()
+                    img.convert('RGB').save(buffered, format="JPEG")
+                    foto_salva = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                else:
+                    foto_salva = m_foto
+                
+                st.session_state.perfil.update({"idade": nova_idade, "peso": novo_peso, "altura": novo_altura, "objetivo": novo_obj, "atividade": nova_atv, "foto": foto_salva})
+                st.session_state.nome_usuario = novo_nome
+                salvar_perfil(st.session_state.username, novo_nome, st.session_state.perfil)
+                st.toast("✅ Perfil atualizado com sucesso!")
+                time.sleep(0.5)
+                st.rerun() 
+            if c2.button("🚪 Sair", use_container_width=True): 
+                fazer_logout()
+
+        # Funções das outras modais
         @st.dialog("➕ Adicionar Alimento")
         def modal_adicionar():
             n_nome = st.text_input("Qual o alimento?")
@@ -546,68 +672,6 @@ else:
                     st.rerun() 
             else: 
                 st.write("Seu estoque já está vazio.")
-                
-        @st.dialog("📱 Como Instalar o App")
-        def modal_instalar_app():
-            st.markdown("""
-            O NutryAi pode ficar salvo na tela inicial do seu celular, igual aos outros aplicativos!
-            
-            **🍎 No iPhone (Safari):**
-            1. Toque no ícone de **Compartilhar** (o quadrado com a setinha para cima no rodapé do navegador).
-            2. Role um pouco para baixo e selecione **"Adicionar à Tela de Início"** (Add to Home Screen).
-            3. Confirme clicando em **"Adicionar"**.
-
-            **🤖 No Android (Chrome):**
-            1. Toque nos **3 pontinhos** no canto superior direito do navegador.
-            2. Selecione **"Adicionar à tela inicial"** ou **"Instalar aplicativo"**.
-            3. Confirme e pronto!
-            
-            Da próxima vez, basta clicar no ícone da Maçã Verde 🍏 direto no seu celular para abrir o app em tela cheia!
-            """)
-
-        @st.dialog("⚙️ Gerenciar Assinatura")
-        def modal_gerenciar_assinatura():
-            st.markdown("<h4 class='adapt-text' style='margin-top:0;'>Detalhes do Plano PRO</h4>", unsafe_allow_html=True)
-            data_ass = st.session_state.perfil.get("data_assinatura", hoje_str)
-            try:
-                data_ass_dt = datetime.strptime(data_ass, "%Y-%m-%d").date()
-                vencimento_dt = data_ass_dt + timedelta(days=30)
-                vencimento_str = vencimento_dt.strftime("%d/%m/%Y")
-                dias_restantes = (vencimento_dt - datetime.now(fuso_local).date()).days
-            except:
-                vencimento_str = "Indisponível"
-                dias_restantes = 0
-                
-            auto_renovar = st.session_state.perfil.get("auto_renovar", True)
-            
-            st.write(f"**Vencimento / Próxima Cobrança:** {vencimento_str}")
-            st.write(f"**Dias restantes:** {max(0, dias_restantes)} dias")
-            st.write(f"**Renovação Automática:** {'✅ Ativada' if auto_renovar else '❌ Desativada'}")
-            
-            st.divider()
-            
-            st.markdown("<h4 class='adapt-text'>Forma de Pagamento</h4>", unsafe_allow_html=True)
-            st.caption("Você será redirecionado para o ambiente seguro do Mercado Pago para atualizar seu cartão.")
-            if st.button("💳 Alterar Forma de Pagamento", use_container_width=True):
-                st.info("No ambiente real de produção, este botão enviará você ao Portal do Cliente do Mercado Pago.")
-                
-            st.write("")
-            
-            if auto_renovar:
-                st.markdown("<h4 class='adapt-text'>Cancelamento</h4>", unsafe_allow_html=True)
-                st.caption("Ao cancelar, você não será cobrado novamente. Seu plano continuará ativo até o fim do período já pago.")
-                if st.button("🚨 Cancelar Assinatura", use_container_width=True):
-                    st.session_state.perfil["auto_renovar"] = False
-                    salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
-                    st.success(f"Assinatura cancelada! Você ainda tem acesso PRO até {vencimento_str}.")
-                    time.sleep(2)
-                    st.rerun()
-            else:
-                st.success(f"Seu plano não será renovado, mas você tem acesso garantido até {vencimento_str}.")
-                if st.button("🔄 Reativar Renovação Automática", type="primary", use_container_width=True):
-                    st.session_state.perfil["auto_renovar"] = True
-                    salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
-                    st.rerun()
 
         p_idade = safe_int(perfil_seguro.get("idade"), 30)
         p_peso = safe_float(perfil_seguro.get("peso"), 70.0)
@@ -653,6 +717,7 @@ else:
         elif hora_atual < 18: saudacao = "Boa tarde"
         else: saudacao = "Boa noite"
 
+        # CABEÇALHO DO APLICATIVO
         col_text, col_profile = st.columns([3, 1], vertical_alignment="center")
         with col_text:
             badge_html = "<span style='background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: black; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;'>PRO</span>" if eh_pro else ""
@@ -664,99 +729,9 @@ else:
             """, unsafe_allow_html=True)
             
         with col_profile:
-            with st.popover("⚙️ Ajustes", use_container_width=True):
-                tab_dados, tab_bio, tab_plan = st.tabs(["👤 Dados", "⚖️ Bio", "💳 Plano"])
-                
-                with tab_dados:
-                    st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-                    if foto_salva: st.markdown(f'<img src="data:image/jpeg;base64,{foto_salva}" width="80" height="80" style="border-radius:50%; object-fit:cover; margin-bottom:15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">', unsafe_allow_html=True)
-                    else: st.markdown('<div style="font-size: 40px; margin-bottom: 15px;">👤</div>', unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                    nova_foto = st.file_uploader("Mudar foto", type=["jpg", "png"], label_visibility="collapsed")
-                    novo_nome = st.text_input("Seu Nome", value=st.session_state.nome_usuario)
-                    nova_idade = st.number_input("Idade", value=p_idade)
-
-                with tab_bio:
-                    novo_peso = st.number_input("Peso (kg)", value=p_peso, step=0.5)
-                    novo_altura = st.number_input("Altura (cm)", value=p_altura)
-                    objetivos = ["Emagrecimento", "Hipertrofia", "Manutenção", "Controle Glicêmico"]
-                    try: idx_obj = objetivos.index(p_obj)
-                    except: idx_obj = 0
-                    novo_obj = st.selectbox("Objetivo Principal", objetivos, index=idx_obj)
-                    atividades = ["Sedentário", "Leve", "Moderada", "Intensa"]
-                    try: idx_atv = atividades.index(p_atv)
-                    except: idx_atv = 2
-                    nova_atv = st.selectbox("Nível de Atividade", atividades, index=idx_atv)
-                    
-                with tab_plan:
-                    if eh_pro:
-                        st.markdown("<h4 class='adapt-text' style='margin-bottom:0;'>👑 NutryAi PRO</h4>", unsafe_allow_html=True)
-                        st.success("Sua assinatura está ativa e funcionando.")
-                        
-                        data_ass = perfil_seguro.get("data_assinatura")
-                        if not data_ass:
-                            data_ass = hoje_str
-                            st.session_state.perfil["data_assinatura"] = data_ass
-                        try:
-                            data_ass_dt = datetime.strptime(data_ass, "%Y-%m-%d").date()
-                            vencimento = (data_ass_dt + timedelta(days=30)).strftime("%d/%m/%Y")
-                        except:
-                            vencimento = "Data não disponível"
-                            
-                        st.markdown(f"**Vencimento:** {vencimento}")
-                        
-                        if st.button("Gerenciar Assinatura", use_container_width=True):
-                            modal_gerenciar_assinatura()
-                    else:
-                        st.markdown("<h4 class='adapt-text' style='margin-bottom:0;'>🍏 Plano Básico</h4>", unsafe_allow_html=True)
-                        st.info("Você está usando a versão gratuita. Suas funções são limitadas.")
-                        
-                        link_mp = gerar_checkout_mercadopago(st.session_state.username)
-                        if link_mp:
-                            st.link_button("💳 Assinar NutryAi PRO (R$ 29,90)", url=link_mp, type="primary", use_container_width=True)
-                            st.caption("Pagamento seguro processado pelo Mercado Pago.")
-                        else:
-                            st.error("⚠️ Sistema de pagamentos indisponível no momento. Contate o suporte.")
-                            
-                        st.divider()
-                        st.markdown("**Tem um cupom promocional?**")
-                        cod_cupom_ajustes = st.text_input("Código promocional", label_visibility="collapsed", placeholder="Digite seu código...", key="cupom_ajustes")
-                        if st.button("Aplicar Cupom", use_container_width=True, key="btn_cupom_ajustes"):
-                            if cod_cupom_ajustes.strip().upper() == "GRATIS30": 
-                                st.session_state.perfil["plano"] = "premium"
-                                st.session_state.perfil["data_assinatura"] = hoje_str
-                                st.session_state.perfil["auto_renovar"] = False 
-                                salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
-                                st.balloons()
-                                st.success("Cupom aplicado! 30 dias de acesso PRO grátis.")
-                                time.sleep(2)
-                                st.rerun()
-                            else:
-                                st.error("Cupom inválido ou expirado.")
-                    
-                    st.divider()
-                    st.markdown("<h4 class='adapt-text' style='margin-bottom:5px;'>📱 App de Celular</h4>", unsafe_allow_html=True)
-                    st.caption("Salve o NutryAi direto na sua tela inicial para não precisar abrir o navegador:")
-                    if st.button("Como Instalar o App?", use_container_width=True):
-                        modal_instalar_app()
-                
-                st.write("")
-                if st.button("💾 Salvar Perfil", type="primary", use_container_width=True):
-                    if nova_foto:
-                        img = Image.open(nova_foto)
-                        img.thumbnail((200, 200)) 
-                        buffered = BytesIO()
-                        img.convert('RGB').save(buffered, format="JPEG")
-                        foto_salva = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                    
-                    st.session_state.perfil.update({"idade": nova_idade, "peso": novo_peso, "altura": novo_altura, "objetivo": novo_obj, "atividade": nova_atv, "foto": foto_salva})
-                    st.session_state.nome_usuario = novo_nome
-                    salvar_perfil(st.session_state.username, novo_nome, st.session_state.perfil)
-                    st.toast("✅ Perfil atualizado com sucesso!")
-                    time.sleep(0.5)
-                    st.rerun() 
-                st.divider()
-                if st.button("🚪 Sair da Conta", use_container_width=True): fazer_logout()
+            # 🚨 O BOTÃO AGORA ABRE A JANELA MODAL PERFEITA 🚨
+            if st.button("⚙️ Ajustes", use_container_width=True):
+                modal_ajustes()
 
         tab_home, tab_rotina, tab_estoque, tab_plano, tab_agua, tab_grafico, tab_pro, tab_chat = st.tabs(["🏠", "🕒", "📦", "🍽️", "💧", "📈", "👑", "💬"])
 
