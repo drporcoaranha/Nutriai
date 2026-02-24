@@ -224,7 +224,7 @@ def fazer_logout():
     st.query_params.clear() 
     st.rerun()
 
-# --- 7. INTERCEPTADORES E WEBHOOKS BLINDADOS ---
+# --- 7. INTERCEPTADORES E WEBHOOKS BLINDADOS (ANTI-RACE CONDITION) ---
 if "status" in st.query_params and "external_reference" in st.query_params:
     status_pagamento = st.query_params.get("status")
     email_pagador = st.query_params.get("external_reference")
@@ -336,7 +336,6 @@ elif not st.session_state.logged_in and "code" in st.query_params:
             st.rerun()
 
 # --- 8. INJEÇÃO DE PWA, MANIFEST E SPLASH SCREEN NATIVO ---
-# Criação do Manifest Dinâmico
 manifest_dict = {
     "name": "NutryAi PRO",
     "short_name": "NutryAi",
@@ -353,7 +352,6 @@ manifest_dict = {
 manifest_json = json.dumps(manifest_dict)
 manifest_b64 = base64.b64encode(manifest_json.encode()).decode("utf-8")
 
-# Criação da Splash Screen em SVG
 splash_svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1170 2532" style="background-color:#F5F5F7;"><text x="50%" y="45%" font-size="200" text-anchor="middle" dominant-baseline="middle">🍏</text><text x="50%" y="55%" font-family="-apple-system, sans-serif" font-size="100" font-weight="900" fill="#1C1C1E" text-anchor="middle" dominant-baseline="middle">NutryAi</text></svg>"""
 splash_b64 = base64.b64encode(splash_svg.encode()).decode("utf-8")
 
@@ -369,21 +367,17 @@ st.markdown(f"""
     :root {{ --bg-color: #F5F5F7; --card-bg: #FFFFFF; --border-color: #E5E5EA; --input-border: #C7C7CC; --input-bg: #FAFAFA; --text-primary: #1C1C1E; --text-secondary: #8E8E93; --shadow-color: rgba(0, 0, 0, 0.04); --accent-color: #34C759; --accent-gradient: linear-gradient(135deg, #34C759 0%, #32D74B 100%); }}
     @media (prefers-color-scheme: dark) {{ :root {{ --bg-color: #000000; --card-bg: #1C1C1E; --border-color: #2C2C2E; --input-border: #48484A; --input-bg: #2C2C2E; --text-primary: #F2F2F7; --text-secondary: #8E8E93; --shadow-color: rgba(0, 0, 0, 0.5); --accent-color: #30D158; --accent-gradient: linear-gradient(135deg, #30D158 0%, #28CD41 100%); }} }}
     
-    header {{ visibility: hidden !important; height: 0px !important; display: none !important; }}
-    .stAppHeader {{ visibility: hidden !important; height: 0px !important; display: none !important; }}
-    [data-testid="stHeader"] {{ visibility: hidden !important; height: 0px !important; display: none !important; }}
-    [data-testid="stToolbar"] {{ display: none !important; }}
-    [data-testid="stAppDeployButton"] {{ display: none !important; }}
-    .stDeployButton {{ display: none !important; }}
-    #stDecoration {{ display: none !important; }}
+    /* 🚨 DESTRUIÇÃO TOTAL DE QUALQUER BARRA DO STREAMLIT 🚨 */
+    html, body, [data-testid="stApp"] {{ background-color: var(--bg-color) !important; margin: 0 !important; padding: 0 !important; }}
+    header, [data-testid="stHeader"], .stAppHeader {{ display: none !important; visibility: hidden !important; height: 0px !important; }}
+    footer, [data-testid="stFooter"] {{ display: none !important; }}
+    [data-testid="stToolbar"], [data-testid="stDecoration"], .stDeployButton, [data-testid="stAppDeployButton"], [data-testid="manage-app-button"] {{ display: none !important; }}
+    #MainMenu, [data-testid="stSidebar"], [data-testid="collapsedControl"] {{ display: none !important; }} 
+    [data-testid="stBottomBlockContainer"], [data-testid="stBottom"] {{ display: none !important; }}
     .viewerBadge_container__1QSob {{ display: none !important; }}
-    [data-testid="stSidebar"] {{ display: none !important; }} 
-    [data-testid="collapsedControl"] {{ display: none !important; }} 
-    #MainMenu {{ display: none !important; }} 
-    footer {{ display: none !important; }} 
     
-    .block-container {{ padding-top: 1rem !important; padding-bottom: 5rem; max-width: 600px !important; margin: 0 auto !important; }}
-    .stApp {{ background-color: var(--bg-color) !important; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Helvetica, Arial, sans-serif !important; }}
+    .block-container {{ padding-top: 1rem !important; padding-bottom: 2rem !important; max-width: 600px !important; margin: 0 auto !important; }}
+    
     div[data-testid="stVerticalBlockBorderWrapper"] > div {{ background-color: var(--card-bg) !important; border-radius: 20px !important; border: 1px solid var(--border-color) !important; box-shadow: 0px 8px 24px var(--shadow-color) !important; padding: 20px !important; }}
     div[data-baseweb="input"] > div, div[data-baseweb="select"] > div {{ border: 1.5px solid var(--input-border) !important; background-color: var(--input-bg) !important; border-radius: 12px !important; }}
     div[data-baseweb="input"] > div:focus-within, div[data-baseweb="select"] > div:focus-within {{ border-color: var(--accent-color) !important; box-shadow: 0 0 0 2px rgba(52,199,89,0.2) !important; }}
@@ -517,7 +511,6 @@ else:
                         salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
             except: pass
             
-    # --- 🚨 DADOS GLOBAIS DE BIOMETRIA 🚨 ---
     p_idade = safe_int(perfil_seguro.get("idade"), 30)
     p_peso = safe_float(perfil_seguro.get("peso"), 70.0)
     p_altura = safe_int(perfil_seguro.get("altura"), 170)
@@ -774,6 +767,7 @@ else:
         elif hora_atual < 18: saudacao = "Boa tarde"
         else: saudacao = "Boa noite"
 
+        # CABEÇALHO DO APLICATIVO
         col_text, col_profile = st.columns([3, 1], vertical_alignment="center")
         with col_text:
             badge_html = "<span style='background: linear-gradient(135deg, #FFD700 0%, #FF9500 100%); color: black; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle;'>PRO</span>" if eh_pro else ""
