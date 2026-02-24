@@ -140,7 +140,7 @@ def criar_conta(email, nome, senha):
                 return True
             return False 
             
-        novo_perfil = {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento", "atividade": "Moderada", "foto": None, "streak": 1, "last_login": "", "historico_peso": [], "plano": "gratis", "rotina": {}, "rotina_preenchida": False, "onboarding_concluido": False, "agua_diaria": {"data": "", "copos": 0}}
+        novo_perfil = {"idade": 30, "peso": 70.0, "altura": 170, "objetivo": "Emagrecimento", "atividade": "Moderada", "foto": None, "streak": 1, "last_login": "", "historico_peso": [], "plano": "gratis", "rotina": {}, "rotina_preenchida": False, "onboarding_concluido": False, "agua_diaria": {"data": "", "copos": 0}, "auto_renovar": False}
         supabase.table('users').insert({"username": email.lower(), "nome": nome, "senha": hash_senha(senha), "perfil": novo_perfil}).execute()
         return True
     except Exception as e: return False
@@ -231,14 +231,13 @@ if "status" in st.query_params and "external_reference" in st.query_params:
     email_pagador = st.query_params.get("external_reference")
     payment_id = st.query_params.get("payment_id")
     
-    st.query_params.clear() # Limpa a URL imediatamente para não rodar duas vezes
+    st.query_params.clear() 
     
     if status_pagamento == "approved" and email_pagador:
         ph = st.empty()
         ph.info("🔄 Validando seu pagamento com o Mercado Pago...")
         pagamento_valido = False
         
-        # Dupla checagem: Pergunta pro Mercado Pago se o ID é real
         if payment_id and MERCADOPAGO_ACCESS_TOKEN:
             try:
                 ver_res = requests.get(f"https://api.mercadopago.com/v1/payments/{payment_id}", headers={"Authorization": f"Bearer {MERCADOPAGO_ACCESS_TOKEN}"})
@@ -246,7 +245,6 @@ if "status" in st.query_params and "external_reference" in st.query_params:
                     pagamento_valido = True
             except: pass
         else:
-            # Fallback (caso esteja testando sem chave oficial ainda)
             pagamento_valido = True 
 
         if pagamento_valido:
@@ -256,14 +254,14 @@ if "status" in st.query_params and "external_reference" in st.query_params:
                     perfil_atual = res_db.data[0].get("perfil", {})
                     perfil_atual["plano"] = "premium"
                     perfil_atual["data_assinatura"] = datetime.now(fuso_local).strftime("%Y-%m-%d")
+                    perfil_atual["auto_renovar"] = True # Habilita renovação por padrão
                     
-                    # Salva no banco de dados
                     supabase.table('users').update({"perfil": perfil_atual}).eq('username', email_pagador.lower()).execute()
                     
-                    # Atualiza a sessão atual se o usuário já estiver logado
                     if st.session_state.username == email_pagador.lower():
                         st.session_state.perfil["plano"] = "premium"
                         st.session_state.perfil["data_assinatura"] = perfil_atual["data_assinatura"]
+                        st.session_state.perfil["auto_renovar"] = True
                         
                     ph.empty()
                     st.balloons()
@@ -374,63 +372,89 @@ if not st.session_state.logged_in:
                         st.session_state.cadastro_sucesso = True
                         st.rerun()
                     else:
-                        st.error("⚠️ Este e-mail já está em uso. Faça o login.")
+                        st.error("⚠️ Este e-mail já está em uso por uma conta. Faça o login.")
                 else:
                     st.warning("Por favor, insira um e-mail válido.")
             else:
                 st.warning("Preencha todos os campos.")
 
-    with st.container():
-        st.markdown("""
-            <div class="brand-container">
-                <div class="brand-icon-box"><span class="brand-icon">🍏</span></div>
-                <h1 class="brand-text">NutryAi</h1>
-                <p class="sub-text" style="margin-top: 8px;">Sua inteligência nutricional.</p>
-            </div>
-        """, unsafe_allow_html=True)
+    if "code" not in st.query_params:
+        with st.container():
+            st.markdown("""
+                <div class="brand-container">
+                    <div class="brand-icon-box"><span class="brand-icon">🍏</span></div>
+                    <h1 class="brand-text">NutryAi</h1>
+                    <p class="sub-text" style="margin-top: 8px;">Sua inteligência nutricional.</p>
+                </div>
+            """, unsafe_allow_html=True)
 
-        if st.session_state.cadastro_sucesso:
-            st.success("✅ Conta criada com sucesso! Faça login abaixo para iniciar.")
-            st.session_state.cadastro_sucesso = False
+            if st.session_state.cadastro_sucesso:
+                st.success("✅ Conta criada com sucesso! Faça login abaixo para iniciar.")
+                st.session_state.cadastro_sucesso = False
 
-        with st.container(border=True):
-            st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse sua conta</h4>", unsafe_allow_html=True)
-            login_user = st.text_input("E-mail", placeholder="ex: seu@email.com", label_visibility="collapsed").lower()
-            login_senha = st.text_input("Senha", type="password", placeholder="Sua senha secreta", label_visibility="collapsed")
-            
-            st.write("")
-            if st.button("Entrar no App", use_container_width=True, type="primary"):
-                if login_user and login_senha:
-                    with st.spinner("🔄 Conectando aos servidores seguros..."):
-                        dados_usuario = validar_login(login_user, login_senha)
+            with st.container(border=True):
+                st.markdown("<h4 class='adapt-text' style='text-align: center; margin-bottom: 20px; font-weight: 700;'>Acesse sua conta</h4>", unsafe_allow_html=True)
+                login_user = st.text_input("E-mail", placeholder="ex: seu@email.com", label_visibility="collapsed").lower()
+                login_senha = st.text_input("Senha", type="password", placeholder="Sua senha secreta", label_visibility="collapsed")
+                
+                st.write("")
+                if st.button("Entrar no App", use_container_width=True, type="primary"):
+                    if login_user and login_senha:
+                        with st.spinner("🔄 Conectando aos servidores seguros..."):
+                            dados_usuario = validar_login(login_user, login_senha)
+                            
+                            if dados_usuario == "google_only":
+                                st.warning("🔗 Conta Google detectada! Faça login com o botão abaixo ou crie uma senha em 'Criar Nova Conta' para acessar manualmente.")
+                            elif dados_usuario:
+                                st.session_state.logged_in = True
+                                st.session_state.username = login_user
+                                st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
+                                perfil_carregado = dados_usuario.get("perfil")
+                                st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
+                                st.session_state.despensa = carregar_despensa(login_user)
+                                st.rerun()
+                            else: 
+                                st.error("E-mail ou senha incorretos.")
+                    else: st.warning("Preencha todos os campos.")
                         
-                        if dados_usuario == "google_only":
-                            st.warning("🔗 Conta Google detectada! Faça login com o botão abaixo ou crie uma senha em 'Criar Nova Conta' para acessar manualmente.")
-                        elif dados_usuario:
-                            st.session_state.logged_in = True
-                            st.session_state.username = login_user
-                            st.session_state.nome_usuario = dados_usuario.get("nome", "Usuário")
-                            perfil_carregado = dados_usuario.get("perfil")
-                            st.session_state.perfil = perfil_carregado if isinstance(perfil_carregado, dict) else {}
-                            st.session_state.despensa = carregar_despensa(login_user)
-                            st.rerun()
-                        else: 
-                            st.error("E-mail ou senha incorretos.")
-                else: st.warning("Preencha todos os campos.")
-                    
-            st.markdown("<div style='text-align: center; margin: 15px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
-            if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
-            
-        st.write("")
-        st.markdown("<hr style='margin: 10px 0; opacity: 0.2'>", unsafe_allow_html=True)
-        if st.button("Não tem conta? Criar Nova Conta", use_container_width=True):
-            modal_registo()
+                st.markdown("<div style='text-align: center; margin: 15px 0; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;'>OU</div>", unsafe_allow_html=True)
+                if GOOGLE_CLIENT_ID: st.markdown(f'<a href="{gerar_url_google()}" class="btn-google-nativo" target="_top">{GOOGLE_SVG} Continuar com Google</a>', unsafe_allow_html=True)
+                
+            st.write("")
+            st.markdown("<hr style='margin: 10px 0; opacity: 0.2'>", unsafe_allow_html=True)
+            if st.button("Não tem conta? Criar Nova Conta", use_container_width=True):
+                modal_registo()
 
 # ==========================================
 # MÓDULO 2: O APLICATIVO E ONBOARDING
 # ==========================================
 else:
     perfil_seguro = st.session_state.perfil if isinstance(st.session_state.perfil, dict) else {}
+    
+    # --- 🚨 VERIFICAÇÃO AUTOMÁTICA DE VENCIMENTO DO PLANO PRO 🚨 ---
+    hoje = datetime.now(fuso_local).date()
+    hoje_str = hoje.strftime("%Y-%m-%d")
+    
+    eh_pro = str(perfil_seguro.get("plano", "gratis")) == "premium"
+    
+    if eh_pro:
+        data_ass = perfil_seguro.get("data_assinatura")
+        if data_ass:
+            try:
+                data_ass_dt = datetime.strptime(data_ass, "%Y-%m-%d").date()
+                if (hoje - data_ass_dt).days >= 30:
+                    # Passou de 30 dias. Ele quer renovar?
+                    if not perfil_seguro.get("auto_renovar", True):
+                        st.session_state.perfil["plano"] = "gratis"
+                        eh_pro = False
+                        salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                        st.warning("⚠️ Seu plano PRO expirou. Faça o upgrade novamente para reativar as funções.")
+                    else:
+                        # Na vida real o Webhook do Mercado Pago atualizaria isso. 
+                        # No MVP, simulamos a renovação com sucesso.
+                        st.session_state.perfil["data_assinatura"] = hoje_str
+                        salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+            except: pass
     
     onboarding_pronto = perfil_seguro.get("onboarding_concluido", False)
     
@@ -456,9 +480,7 @@ else:
                     "idade": ob_idade, "peso": ob_peso, "altura": ob_altura, 
                     "objetivo": ob_obj, "atividade": ob_atv, "onboarding_concluido": True
                 })
-                hoje_str = datetime.now(fuso_local).strftime("%Y-%m-%d")
                 st.session_state.perfil["historico_peso"] = [{"data": hoje_str, "peso": float(ob_peso)}]
-                
                 salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                 st.balloons()
                 time.sleep(1.5)
@@ -519,6 +541,51 @@ else:
             Da próxima vez, basta clicar no ícone da Maçã Verde 🍏 direto no seu celular para abrir o app em tela cheia!
             """)
 
+        # 🚨 NOVO MODAL: GERENCIAMENTO DE ASSINATURA E GRACE PERIOD 🚨
+        @st.dialog("⚙️ Gerenciar Assinatura")
+        def modal_gerenciar_assinatura():
+            st.markdown("<h4 class='adapt-text' style='margin-top:0;'>Detalhes do Plano PRO</h4>", unsafe_allow_html=True)
+            data_ass = st.session_state.perfil.get("data_assinatura", hoje_str)
+            try:
+                data_ass_dt = datetime.strptime(data_ass, "%Y-%m-%d").date()
+                vencimento_dt = data_ass_dt + timedelta(days=30)
+                vencimento_str = vencimento_dt.strftime("%d/%m/%Y")
+                dias_restantes = (vencimento_dt - datetime.now(fuso_local).date()).days
+            except:
+                vencimento_str = "Indisponível"
+                dias_restantes = 0
+                
+            auto_renovar = st.session_state.perfil.get("auto_renovar", True)
+            
+            st.write(f"**Vencimento / Próxima Cobrança:** {vencimento_str}")
+            st.write(f"**Dias restantes:** {max(0, dias_restantes)} dias")
+            st.write(f"**Renovação Automática:** {'✅ Ativada' if auto_renovar else '❌ Desativada'}")
+            
+            st.divider()
+            
+            st.markdown("<h4 class='adapt-text'>Forma de Pagamento</h4>", unsafe_allow_html=True)
+            st.caption("Você será redirecionado para o ambiente seguro do Mercado Pago para atualizar seu cartão.")
+            if st.button("💳 Alterar Forma de Pagamento", use_container_width=True):
+                st.info("No ambiente real de produção, este botão enviará você ao Portal do Cliente do Mercado Pago.")
+                
+            st.write("")
+            
+            if auto_renovar:
+                st.markdown("<h4 class='adapt-text'>Cancelamento</h4>", unsafe_allow_html=True)
+                st.caption("Ao cancelar, você não será cobrado novamente. Seu plano continuará ativo até o fim do período já pago.")
+                if st.button("🚨 Cancelar Assinatura", use_container_width=True):
+                    st.session_state.perfil["auto_renovar"] = False
+                    salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                    st.success(f"Assinatura cancelada! Você ainda tem acesso PRO até {vencimento_str}.")
+                    time.sleep(2)
+                    st.rerun()
+            else:
+                st.success(f"Seu plano não será renovado, mas você tem acesso garantido até {vencimento_str}.")
+                if st.button("🔄 Reativar Renovação Automática", type="primary", use_container_width=True):
+                    st.session_state.perfil["auto_renovar"] = True
+                    salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
+                    st.rerun()
+
         p_idade = safe_int(perfil_seguro.get("idade"), 30)
         p_peso = safe_float(perfil_seguro.get("peso"), 70.0)
         p_altura = safe_int(perfil_seguro.get("altura"), 170)
@@ -526,10 +593,7 @@ else:
         p_atv = str(perfil_seguro.get("atividade") or "Moderada")
         foto_salva = perfil_seguro.get("foto")
         streak_atual = safe_int(perfil_seguro.get("streak"), 1)
-        eh_pro = str(perfil_seguro.get("plano", "gratis")) == "premium"
 
-        hoje = datetime.now(fuso_local).date()
-        hoje_str = hoje.strftime("%Y-%m-%d")
         ontem = hoje - timedelta(days=1)
         last_login_str = str(perfil_seguro.get("last_login") or "")
 
@@ -604,7 +668,7 @@ else:
                 with tab_plan:
                     if eh_pro:
                         st.markdown("<h4 class='adapt-text' style='margin-bottom:0;'>👑 NutryAi PRO</h4>", unsafe_allow_html=True)
-                        st.success("Sua assinatura está ativa e funcionando perfeitamente.")
+                        st.success("Sua assinatura está ativa e funcionando.")
                         
                         data_ass = perfil_seguro.get("data_assinatura")
                         if not data_ass:
@@ -616,10 +680,10 @@ else:
                         except:
                             vencimento = "Data não disponível"
                             
-                        st.markdown(f"**Próxima Renovação:** {vencimento}")
-                        st.markdown("**Status:** Renovação Automática (Mercado Pago)")
+                        st.markdown(f"**Vencimento:** {vencimento}")
+                        
                         if st.button("Gerenciar Assinatura", use_container_width=True):
-                            st.toast("Painel de assinaturas em breve.")
+                            modal_gerenciar_assinatura()
                     else:
                         st.markdown("<h4 class='adapt-text' style='margin-bottom:0;'>🍏 Plano Básico</h4>", unsafe_allow_html=True)
                         st.info("Você está usando a versão gratuita. Suas funções são limitadas.")
@@ -632,6 +696,7 @@ else:
                             if st.button("🌟 Simulador de Upgrade (Modo Dev)", type="primary", use_container_width=True):
                                 st.session_state.perfil["plano"] = "premium"
                                 st.session_state.perfil["data_assinatura"] = hoje_str
+                                st.session_state.perfil["auto_renovar"] = True
                                 salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                                 st.balloons()
                                 time.sleep(1)
@@ -1073,6 +1138,7 @@ else:
                 if st.button("Liberar Acesso PRO (Test Drive)", use_container_width=True):
                     st.session_state.perfil["plano"] = "premium"
                     st.session_state.perfil["data_assinatura"] = hoje_str
+                    st.session_state.perfil["auto_renovar"] = True
                     salvar_perfil(st.session_state.username, st.session_state.nome_usuario, st.session_state.perfil)
                     st.balloons()
                     time.sleep(1)
